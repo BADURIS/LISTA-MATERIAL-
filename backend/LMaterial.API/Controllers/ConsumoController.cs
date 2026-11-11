@@ -18,10 +18,22 @@ public class ConsumoController : ControllerBase
     private const string XlsxContentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
     private readonly IConsumoService _consumoService;
+    private readonly LMaterial.Application.Services.Relatorios.IRelatorioPdfService _relatorioPdfService;
 
-    public ConsumoController(IConsumoService consumoService)
+    public ConsumoController(IConsumoService consumoService, LMaterial.Application.Services.Relatorios.IRelatorioPdfService relatorioPdfService)
     {
         _consumoService = consumoService ?? throw new ArgumentNullException(nameof(consumoService));
+        _relatorioPdfService = relatorioPdfService ?? throw new ArgumentNullException(nameof(relatorioPdfService));
+    }
+
+    [HttpGet("periodo/pdf")]
+    [Authorize(Roles = "Gestor,Supervisor")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> PeriodoPdf([FromQuery] DateOnly dataInicio, [FromQuery] DateOnly dataFim, [FromQuery] Guid? localId, CancellationToken ct)
+    {
+        var (conteudo, nomeArquivo) = await _relatorioPdfService.GerarConsumoAsync(dataInicio, dataFim, localId, ct);
+        return File(conteudo, "application/pdf", nomeArquivo);
     }
 
     // Consumo por material e por local num período (opcionalmente de um único local)

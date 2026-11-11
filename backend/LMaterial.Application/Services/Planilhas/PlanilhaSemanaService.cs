@@ -102,7 +102,7 @@ public class PlanilhaSemanaService : IPlanilhaSemanaService
         planilha.Cell(2, 1).Value = lista.SemPedido
             ? "Sem pedido nesta semana"
             : lista.DataRetirada.HasValue
-                ? $"Retirado por {lista.NomeRetiradoPor} em {lista.DataRetirada.Value.ToLocalTime():dd/MM/yyyy HH:mm}"
+                ? $"Retirado por {lista.NomeRetiradoPor} em {LMaterial.Application.Services.Relatorios.HorarioBrasilia.Formatar(lista.DataRetirada.Value)}"
                 : $"Situação: {lista.Status}";
 
         var linhas = lista.Itens

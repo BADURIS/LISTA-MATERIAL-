@@ -153,6 +153,7 @@ builder.Services.AddScoped<ISemanaListaService, SemanaListaService>();
 builder.Services.AddScoped<INotificacaoService, NotificacaoService>();
 builder.Services.AddScoped<IPlanilhaSemanaService, PlanilhaSemanaService>();
 builder.Services.AddScoped<LMaterial.Application.Services.Consumo.IConsumoService, LMaterial.Application.Services.Consumo.ConsumoService>();
+builder.Services.AddScoped<LMaterial.Application.Services.Relatorios.IRelatorioPdfService, LMaterial.Application.Services.Relatorios.RelatorioPdfService>();
 
 // 9. Registro do FluentValidation (Assembly Scan)
 builder.Services.AddValidatorsFromAssemblyContaining<CreateMaterialRequestValidator>();

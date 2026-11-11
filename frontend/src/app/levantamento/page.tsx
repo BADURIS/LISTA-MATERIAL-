@@ -5,7 +5,7 @@ import { baixarArquivo, fetchApi } from '@/lib/api';
 import { formatarData, STATUS_SEMANA } from '@/lib/formatacao';
 import type { SemanaResumo } from '@/lib/tipos';
 import { Aviso, Cabecalho, Carregando, Mensagem, Protegido, Vazio } from '@/components/ui';
-import { FileSpreadsheet, BarChart2 } from 'lucide-react';
+import { FileSpreadsheet, FileText, BarChart2 } from 'lucide-react';
 
 interface LinhaResumo {
   material: string;
@@ -45,9 +45,9 @@ function Levantamento() {
       .finally(() => setLoading(false));
   }, [semanaId]);
 
-  const exportar = async () => {
+  const exportar = async (formato: 'planilha' | 'pdf') => {
     try {
-      await baixarArquivo(`/api/semanas-lista/${semanaId}/planilha`, 'levantamento.xlsx');
+      await baixarArquivo(`/api/semanas-lista/${semanaId}/${formato}`, formato === 'pdf' ? 'levantamento.pdf' : 'levantamento.xlsx');
     } catch (err: any) {
       setMensagem({ tipo: 'erro', texto: err.message || 'Erro ao exportar.' });
     }
@@ -68,12 +68,20 @@ function Levantamento() {
         subtitulo="Total separado por material, somando todos os locais da semana."
       >
         {semanaId && (
-          <button
-            onClick={exportar}
-            className="px-4 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl font-semibold text-sm transition flex items-center gap-2 shadow"
-          >
-            <FileSpreadsheet className="w-4 h-4" /> Exportar Excel
-          </button>
+          <>
+            <button
+              onClick={() => exportar('planilha')}
+              className="px-4 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl font-semibold text-sm transition flex items-center gap-2 shadow"
+            >
+              <FileSpreadsheet className="w-4 h-4" /> Exportar Excel
+            </button>
+            <button
+              onClick={() => exportar('pdf')}
+              className="px-4 py-2.5 bg-rose-700 hover:bg-rose-800 text-white rounded-xl font-semibold text-sm transition flex items-center gap-2 shadow"
+            >
+              <FileText className="w-4 h-4" /> Exportar PDF
+            </button>
+          </>
         )}
       </Cabecalho>
 

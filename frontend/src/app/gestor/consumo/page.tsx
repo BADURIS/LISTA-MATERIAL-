@@ -10,6 +10,7 @@ import {
   Calendar,
   Filter,
   FileSpreadsheet,
+  FileText,
   Building,
 } from 'lucide-react';
 import {
@@ -129,9 +130,9 @@ function PainelConsumo() {
     setDataFim(hoje.toISOString().split('T')[0]);
   };
 
-  const exportarConsumo = async () => {
+  const exportarConsumo = async (formato: 'planilha' | 'pdf') => {
     try {
-      await baixarArquivo(`/api/consumo/periodo/planilha?${filtroQuery()}`, 'consumo.xlsx');
+      await baixarArquivo(`/api/consumo/periodo/${formato}?${filtroQuery()}`, formato === 'pdf' ? 'consumo.pdf' : 'consumo.xlsx');
     } catch (err: any) {
       alert(err.message || 'Erro ao exportar o consumo.');
     }
@@ -153,11 +154,18 @@ function PainelConsumo() {
 
         <div className="flex items-center gap-2">
           <button
-            onClick={exportarConsumo}
+            onClick={() => exportarConsumo('planilha')}
             className="px-4 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl font-semibold text-sm transition flex items-center gap-2 shadow"
           >
             <FileSpreadsheet className="w-4 h-4" />
             Exportar Excel
+          </button>
+          <button
+            onClick={() => exportarConsumo('pdf')}
+            className="px-4 py-2.5 bg-rose-700 hover:bg-rose-800 text-white rounded-xl font-semibold text-sm transition flex items-center gap-2 shadow"
+          >
+            <FileText className="w-4 h-4" />
+            Exportar PDF
           </button>
         </div>
       </div>

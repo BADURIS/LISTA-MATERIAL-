@@ -6,7 +6,7 @@ import { formatarData, formatarDataHora, STATUS_LISTA, STATUS_SEMANA } from '@/l
 import type { Semana, SemanaResumo } from '@/lib/tipos';
 import { useAuth } from '@/context/AuthContext';
 import { Aviso, Cabecalho, Carregando, Mensagem, Protegido, Vazio } from '@/components/ui';
-import { Calendar, FileSpreadsheet, ChevronRight, ShieldCheck, ShieldAlert } from 'lucide-react';
+import { Calendar, FileSpreadsheet, FileText, ChevronRight, ShieldCheck, ShieldAlert } from 'lucide-react';
 
 function Historico() {
   const { user } = useAuth();
@@ -107,12 +107,20 @@ function Historico() {
                     </p>
                   </div>
                   {podeExportarSemana && detalhe.status !== 'EmMontagem' && (
-                    <button
-                      onClick={() => exportar(`/api/semanas-lista/${detalhe.id}/planilha`)}
-                      className="px-3 py-2 bg-emerald-100 text-emerald-800 hover:bg-emerald-200 rounded-lg text-xs font-bold transition flex items-center gap-1.5 self-start"
-                    >
-                      <FileSpreadsheet className="w-4 h-4 text-emerald-700" /> Consolidado (Excel)
-                    </button>
+                    <div className="flex items-center gap-2 self-start">
+                      <button
+                        onClick={() => exportar(`/api/semanas-lista/${detalhe.id}/planilha`)}
+                        className="px-3 py-2 bg-emerald-100 text-emerald-800 hover:bg-emerald-200 rounded-lg text-xs font-bold transition flex items-center gap-1.5"
+                      >
+                        <FileSpreadsheet className="w-4 h-4 text-emerald-700" /> Consolidado Excel
+                      </button>
+                      <button
+                        onClick={() => exportar(`/api/semanas-lista/${detalhe.id}/pdf`)}
+                        className="px-3 py-2 bg-rose-100 text-rose-800 hover:bg-rose-200 rounded-lg text-xs font-bold transition flex items-center gap-1.5"
+                      >
+                        <FileText className="w-4 h-4 text-rose-700" /> Consolidado PDF
+                      </button>
+                    </div>
                   )}
                 </div>
 
@@ -148,6 +156,16 @@ function Historico() {
                             aria-label={`Exportar planilha de ${l.nomeLocal}`}
                           >
                             <FileSpreadsheet className="w-4 h-4" />
+                          </button>
+                        )}
+                        {!l.semPedido && (
+                          <button
+                            onClick={() => exportar(`/api/semanas-lista/${detalhe.id}/listas/${l.id}/pdf`)}
+                            className="p-1.5 rounded-lg text-rose-700 hover:bg-rose-50"
+                            title={`PDF de ${l.nomeLocal}`}
+                            aria-label={`Exportar PDF de ${l.nomeLocal}`}
+                          >
+                            <FileText className="w-4 h-4" />
                           </button>
                         )}
                       </div>

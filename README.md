@@ -13,7 +13,7 @@ Junção dos dois projetos anteriores:
 3. **Almoxarife** informa a quantidade separada de cada item (pode salvar aos poucos); faltas ficam registradas.
 4. **Coordenador** confirma o recebimento e registra a retirada com o nome de quem retirou (assinatura digital).
 5. Com todas as retiradas registradas a semana é finalizada.
-6. **Gestor** acompanha consumo (por material/local e evolução semanal), histórico e exporta planilhas Excel.
+6. **Gestor** acompanha consumo (por material/local e evolução semanal), histórico e exporta planilhas Excel e relatórios em PDF.
 
 Avisos dentro do sistema (sino no topo) são enviados em cada etapa.
 
@@ -50,3 +50,9 @@ na mesma rede só precisam acessar `http://<ip-do-computador>:3000`.
 cd backend && dotnet test                         # testes das regras de negócio
 node scripts/popular-demo.mjs 4 <senha>           # fluxo completo pela API; deixa 4 semanas de demonstração no banco
 ```
+
+## Relatórios em PDF
+
+Gerados no servidor com PDFsharp/MigraDoc (licença MIT): lista do local (com dados da retirada, assinatura digital
+e espaço para assinatura em papel), levantamento da semana e consumo do período. Horários sempre em horário de Brasília.
+Num servidor Linux é preciso ter uma fonte instalada (`apt-get install fonts-liberation`).

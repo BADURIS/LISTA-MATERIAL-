@@ -21,13 +21,20 @@ public class SemanasListaController : ControllerBase
 {
     private const string XlsxContentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
+    private const string PdfContentType = "application/pdf";
+
     private readonly ISemanaListaService _semanaListaService;
     private readonly IPlanilhaSemanaService _planilhaSemanaService;
+    private readonly LMaterial.Application.Services.Relatorios.IRelatorioPdfService _relatorioPdfService;
 
-    public SemanasListaController(ISemanaListaService semanaListaService, IPlanilhaSemanaService planilhaSemanaService)
+    public SemanasListaController(
+        ISemanaListaService semanaListaService,
+        IPlanilhaSemanaService planilhaSemanaService,
+        LMaterial.Application.Services.Relatorios.IRelatorioPdfService relatorioPdfService)
     {
         _semanaListaService = semanaListaService ?? throw new ArgumentNullException(nameof(semanaListaService));
         _planilhaSemanaService = planilhaSemanaService ?? throw new ArgumentNullException(nameof(planilhaSemanaService));
+        _relatorioPdfService = relatorioPdfService ?? throw new ArgumentNullException(nameof(relatorioPdfService));
     }
 
     [HttpPost]
@@ -187,5 +194,26 @@ public class SemanasListaController : ControllerBase
     {
         var (conteudo, nomeArquivo) = await _planilhaSemanaService.GerarXlsxLocalAsync(id, listaLocalId, ct);
         return File(conteudo, XlsxContentType, nomeArquivo);
+    }
+
+    // Levantamento da semana em PDF (saída por material e situação de cada local)
+    [HttpGet("{id:guid}/pdf")]
+    [Authorize(Roles = "Gestor,Almoxarife,Supervisor")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> ExportarPdf(Guid id, CancellationToken ct)
+    {
+        var (conteudo, nomeArquivo) = await _relatorioPdfService.GerarSemanaAsync(id, ct);
+        return File(conteudo, PdfContentType, nomeArquivo);
+    }
+
+    // Lista de um local em PDF, com dados da retirada e espaço para assinatura (todos os perfis)
+    [HttpGet("{id:guid}/listas/{listaLocalId:guid}/pdf")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> ExportarPdfLocal(Guid id, Guid listaLocalId, CancellationToken ct)
+    {
+        var (conteudo, nomeArquivo) = await _relatorioPdfService.GerarListaLocalAsync(id, listaLocalId, ct);
+        return File(conteudo, PdfContentType, nomeArquivo);
     }
 }

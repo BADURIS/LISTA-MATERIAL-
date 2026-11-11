@@ -9,6 +9,7 @@ import {
   CheckCircle2,
   AlertTriangle,
   FileSpreadsheet,
+  FileText,
   UserCheck,
   Lock,
   ChevronDown,
@@ -221,12 +222,12 @@ export default function SemanaEmAndamento({ modo }: { modo: ModoSemana }) {
     }
   };
 
-  const exportarLocal = async () => {
+  const exportarLocal = async (formato: 'planilha' | 'pdf') => {
     if (!semana || !local) return;
     try {
-      await baixarArquivo(`/api/semanas-lista/${semana.id}/listas/${local.id}/planilha`, 'lista-local.xlsx');
+      await baixarArquivo(`/api/semanas-lista/${semana.id}/listas/${local.id}/${formato}`, formato === 'pdf' ? 'lista-local.pdf' : 'lista-local.xlsx');
     } catch (err: any) {
-      setMensagem({ tipo: 'erro', texto: err.message || 'Erro ao exportar a planilha.' });
+      setMensagem({ tipo: 'erro', texto: err.message || 'Erro ao exportar.' });
     }
   };
 
@@ -354,13 +355,23 @@ export default function SemanaEmAndamento({ modo }: { modo: ModoSemana }) {
                   )}
                 </div>
                 {!local.semPedido && (
-                  <button
-                    onClick={exportarLocal}
-                    className="px-3 py-2 bg-emerald-100 text-emerald-800 hover:bg-emerald-200 rounded-lg text-xs font-bold transition flex items-center gap-1.5 self-start"
-                  >
-                    <FileSpreadsheet className="w-4 h-4 text-emerald-700" />
-                    Excel
-                  </button>
+                  <div className="flex items-center gap-2 self-start">
+                    <button
+                      onClick={() => exportarLocal('planilha')}
+                      className="px-3 py-2 bg-emerald-100 text-emerald-800 hover:bg-emerald-200 rounded-lg text-xs font-bold transition flex items-center gap-1.5"
+                    >
+                      <FileSpreadsheet className="w-4 h-4 text-emerald-700" />
+                      Excel
+                    </button>
+                    <button
+                      onClick={() => exportarLocal('pdf')}
+                      className="px-3 py-2 bg-rose-100 text-rose-800 hover:bg-rose-200 rounded-lg text-xs font-bold transition flex items-center gap-1.5"
+                      title="PDF para imprimir, com espaço para assinatura"
+                    >
+                      <FileText className="w-4 h-4 text-rose-700" />
+                      PDF
+                    </button>
+                  </div>
                 )}
               </div>
 
