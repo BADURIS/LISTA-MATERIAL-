@@ -1,14 +1,15 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { fetchApi } from '@/lib/api';
+import { baixarArquivo, fetchApi, listarTodos } from '@/lib/api';
+import { formatarData } from '@/lib/formatacao';
+import { Protegido } from '@/components/ui';
 import {
   PieChart as PieChartIcon,
   BarChart3,
   Calendar,
   Filter,
   FileSpreadsheet,
-  FileText,
   Building,
 } from 'lucide-react';
 import {
@@ -46,6 +47,7 @@ interface ConsumoLocal {
 interface ConsumoGeralDto {
   dataInicio: string;
   dataFim: string;
+  quantidadeSemanas: number;
   porMaterial: ConsumoMaterial[];
   porLocal: ConsumoLocal[];
 }
@@ -57,6 +59,14 @@ const COLORS = [
 ];
 
 export default function GestorConsumoPage() {
+  return (
+    <Protegido perfis={['Gestor', 'Supervisor']}>
+      <PainelConsumo />
+    </Protegido>
+  );
+}
+
+function PainelConsumo() {
   const [dataInicio, setDataInicio] = useState<string>(() => {
     const d = new Date();
     d.setDate(d.getDate() - 30);
@@ -79,36 +89,29 @@ export default function GestorConsumoPage() {
 
   const carregarLocais = async () => {
     try {
-      const data = await fetchApi<LocalDto[]>('/api/locais');
+      const data = await listarTodos<LocalDto>('/api/locais');
       setLocais(data);
     } catch (_) {}
   };
 
+  const filtroQuery = () =>
+    `dataInicio=${dataInicio}&dataFim=${dataFim}${selectedLocalId ? `&localId=${selectedLocalId}` : ''}`;
+
   const carregarDadosConsumo = async () => {
+    if (!dataInicio || !dataFim || dataInicio > dataFim) return;
     setLoading(true);
     try {
-      if (selectedLocalId) {
-        const matData = await fetchApi<ConsumoMaterial[]>(
-          `/api/consumo/local/${selectedLocalId}?dataInicio=${dataInicio}&dataFim=${dataFim}`
-        );
-        setConsumo({
-          dataInicio,
-          dataFim,
-          porMaterial: matData,
-          porLocal: [],
-        });
-      } else {
-        const geralData = await fetchApi<ConsumoGeralDto>(
-          `/api/consumo/geral?dataInicio=${dataInicio}&dataFim=${dataFim}`
-        );
-        setConsumo(geralData);
-      }
+      setConsumo(await fetchApi<ConsumoGeralDto>(`/api/consumo/periodo?${filtroQuery()}`));
     } catch (_) {
       setConsumo(null);
     } finally {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (selectedLocalId) setModoVisualizacao('material');
+  }, [selectedLocalId]);
 
   const aplicarAtalhoData = (tipo: '4semanas' | 'mes' | 'ano') => {
     const hoje = new Date();
@@ -126,23 +129,11 @@ export default function GestorConsumoPage() {
     setDataFim(hoje.toISOString().split('T')[0]);
   };
 
-  const exportarConsumo = async (formato: 'excel' | 'pdf') => {
+  const exportarConsumo = async () => {
     try {
-      const endpoint = selectedLocalId
-        ? `/api/consumo/local/${selectedLocalId}/export?dataInicio=${dataInicio}&dataFim=${dataFim}&formato=${formato}`
-        : `/api/consumo/geral/export?dataInicio=${dataInicio}&dataFim=${dataFim}&formato=${formato}`;
-
-      const blob = await fetchApi(endpoint);
-      const url = window.URL.createObjectURL(blob as Blob);
-      const a = document.createElement('a');
-      a.href = url;
-      const ext = formato === 'excel' ? 'xlsx' : 'pdf';
-      a.download = `Relatorio-Consumo.${ext}`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
+      await baixarArquivo(`/api/consumo/periodo/planilha?${filtroQuery()}`, 'consumo.xlsx');
     } catch (err: any) {
-      alert('Erro ao realizar exportação de consumo.');
+      alert(err.message || 'Erro ao exportar o consumo.');
     }
   };
 
@@ -162,18 +153,11 @@ export default function GestorConsumoPage() {
 
         <div className="flex items-center gap-2">
           <button
-            onClick={() => exportarConsumo('excel')}
+            onClick={exportarConsumo}
             className="px-4 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl font-semibold text-sm transition flex items-center gap-2 shadow"
           >
             <FileSpreadsheet className="w-4 h-4" />
-            Excel
-          </button>
-          <button
-            onClick={() => exportarConsumo('pdf')}
-            className="px-4 py-2.5 bg-rose-700 hover:bg-rose-800 text-white rounded-xl font-semibold text-sm transition flex items-center gap-2 shadow"
-          >
-            <FileText className="w-4 h-4" />
-            PDF
+            Exportar Excel
           </button>
         </div>
       </div>
@@ -283,7 +267,8 @@ export default function GestorConsumoPage() {
             </div>
 
             <span className="text-xs font-medium text-slate-500 hidden sm:inline">
-              Período: <strong className="text-slate-800">{dataInicio}</strong> a <strong className="text-slate-800">{dataFim}</strong>
+              {consumo?.quantidadeSemanas ?? 0} semana(s) entre <strong className="text-slate-800">{formatarData(dataInicio)}</strong> e{' '}
+              <strong className="text-slate-800">{formatarData(dataFim)}</strong> · só entram retiradas registradas
             </span>
           </div>
 

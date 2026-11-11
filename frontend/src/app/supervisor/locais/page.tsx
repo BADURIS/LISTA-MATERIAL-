@@ -1,179 +1,120 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { fetchApi } from '@/lib/api';
+import React, { useEffect, useState } from 'react';
+import { fetchApi, listarTodos } from '@/lib/api';
+import type { Local } from '@/lib/tipos';
+import { Aviso, Cabecalho, Carregando, Mensagem, Protegido } from '@/components/ui';
 import { Plus, Edit2, Check, X, Power, PowerOff, Building } from 'lucide-react';
 
-interface Local {
-  id: string;
-  nome: string;
-  tipo: string;
-  ordemExibicao: number;
-  ativo: boolean;
-}
+const TIPOS: Record<string, string> = { Andar: 'Andar', AreaComum: 'Área comum' };
 
-export default function SupervisorLocaisPage() {
+function GerenciarLocais() {
   const [locais, setLocais] = useState<Local[]>([]);
   const [loading, setLoading] = useState(true);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [novoNomeInput, setNovoNomeInput] = useState('');
-  const [mostrarModalAdd, setMostrarModalAdd] = useState(false);
-  const [addNome, setAddNome] = useState('');
-  const [addTipo, setAddTipo] = useState<'Andar' | 'AreaComum'>('Andar');
-  const [mensagem, setMensagem] = useState<{ tipo: 'sucesso' | 'erro'; texto: string } | null>(null);
+  const [editandoId, setEditandoId] = useState<string | null>(null);
+  const [nomeEdicao, setNomeEdicao] = useState('');
+  const [modalNovo, setModalNovo] = useState(false);
+  const [novoNome, setNovoNome] = useState('');
+  const [novoTipo, setNovoTipo] = useState<'Andar' | 'AreaComum'>('Andar');
+  const [mensagem, setMensagem] = useState<Mensagem>(null);
 
   useEffect(() => {
-    carregarLocais();
+    listarTodos<Local>('/api/locais')
+      .then((l) => setLocais(l.sort((a, b) => a.ordemExibicao - b.ordemExibicao)))
+      .catch((err) => setMensagem({ tipo: 'erro', texto: err.message || 'Erro ao carregar locais.' }))
+      .finally(() => setLoading(false));
   }, []);
 
-  const carregarLocais = async () => {
-    setLoading(true);
-    try {
-      const data = await fetchApi<Local[]>('/api/locais');
-      setLocais(data);
-    } catch (err: any) {
-      setMensagem({ tipo: 'erro', texto: 'Erro ao carregar locais.' });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const salvarEdicaoNome = async (localId: string) => {
-    if (!novoNomeInput.trim()) return;
+  const atualizar = async (local: Local, mudancas: Partial<Local>, sucesso: string) => {
     setMensagem(null);
     try {
-      const updated = await fetchApi<Local>(`/api/locais/${localId}`, {
+      const atualizado = await fetchApi<Local>(`/api/locais/${local.id}`, {
         method: 'PUT',
-        body: JSON.stringify({ novoNome: novoNomeInput }),
+        body: JSON.stringify({ nome: local.nome, ativo: local.ativo, tipo: local.tipo, ordemExibicao: local.ordemExibicao, ...mudancas }),
       });
-      setLocais((prev) => prev.map((l) => (l.id === localId ? updated : l)));
-      setEditingId(null);
-      setMensagem({ tipo: 'sucesso', texto: 'Nome do local atualizado com sucesso!' });
+      setLocais((prev) => prev.map((l) => (l.id === local.id ? atualizado : l)));
+      setEditandoId(null);
+      setMensagem({ tipo: 'sucesso', texto: sucesso });
     } catch (err: any) {
-      setMensagem({ tipo: 'erro', texto: err.message || 'Erro ao atualizar nome.' });
+      setMensagem({ tipo: 'erro', texto: err.message || 'Erro ao atualizar o local.' });
     }
   };
 
-  const inativarLocal = async (localId: string) => {
-    setMensagem(null);
-    try {
-      await fetchApi(`/api/locais/${localId}/inativar`, { method: 'POST' });
-      setLocais((prev) => prev.map((l) => (l.id === localId ? { ...l, ativo: false } : l)));
-      setMensagem({ tipo: 'sucesso', texto: 'Local inativado com sucesso!' });
-    } catch (err: any) {
-      setMensagem({ tipo: 'erro', texto: err.message || 'Erro ao inativar local.' });
-    }
-  };
-
-  const reativarLocal = async (localId: string) => {
-    setMensagem(null);
-    try {
-      await fetchApi(`/api/locais/${localId}/reativar`, { method: 'POST' });
-      setLocais((prev) => prev.map((l) => (l.id === localId ? { ...l, ativo: true } : l)));
-      setMensagem({ tipo: 'sucesso', texto: 'Local reativado com sucesso!' });
-    } catch (err: any) {
-      setMensagem({ tipo: 'erro', texto: err.message || 'Erro ao reativar local.' });
-    }
-  };
-
-  const criarLocal = async (e: React.FormEvent) => {
+  const criar = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!addNome.trim()) return;
+    if (!novoNome.trim()) return;
     setMensagem(null);
-
-    const proximaOrdem = locais.length + 1;
     try {
-      const novoLocal = await fetchApi<Local>('/api/locais', {
+      const ordem = Math.max(0, ...locais.map((l) => l.ordemExibicao)) + 1;
+      const novo = await fetchApi<Local>('/api/locais', {
         method: 'POST',
-        body: JSON.stringify({
-          nome: addNome,
-          tipo: addTipo,
-          ordemExibicao: proximaOrdem,
-        }),
+        body: JSON.stringify({ nome: novoNome.trim(), tipo: novoTipo, ordemExibicao: ordem }),
       });
-      setLocais((prev) => [...prev, novoLocal]);
-      setAddNome('');
-      setMostrarModalAdd(false);
-      setMensagem({ tipo: 'sucesso', texto: 'Novo local adicionado com sucesso!' });
+      setLocais((prev) => [...prev, novo]);
+      setNovoNome('');
+      setModalNovo(false);
+      setMensagem({ tipo: 'sucesso', texto: `Local "${novo.nome}" adicionado. Ele entra a partir da próxima semana criada.` });
     } catch (err: any) {
-      setMensagem({ tipo: 'erro', texto: err.message || 'Erro ao adicionar local.' });
+      setMensagem({ tipo: 'erro', texto: err.message || 'Erro ao adicionar o local.' });
     }
   };
+
+  if (loading) return <Carregando />;
 
   return (
     <div className="space-y-6">
-      {/* Top Header */}
-      <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
-            <Building className="w-6 h-6 text-[#1F6D2E]" />
-            Gerenciamento de Locais
-          </h2>
-          <p className="text-sm text-slate-500 mt-1">
-            Cadastre novos locais, renomeie ou inative/reative locais para as próximas semanas.
-          </p>
-        </div>
-
+      <Cabecalho
+        titulo={
+          <>
+            <Building className="w-6 h-6 text-[#1F6D2E]" /> Locais
+          </>
+        }
+        subtitulo="Locais ativos entram automaticamente em cada nova semana. Inativar não apaga o histórico."
+      >
         <button
-          onClick={() => setMostrarModalAdd(true)}
+          onClick={() => setModalNovo(true)}
           className="px-4 py-2.5 bg-[#1F6D2E] text-white rounded-xl font-semibold text-sm hover:bg-[#175423] transition flex items-center gap-2 shadow"
         >
-          <Plus className="w-4 h-4" />
-          Adicionar Local
+          <Plus className="w-4 h-4" /> Adicionar local
         </button>
-      </div>
+      </Cabecalho>
 
-      {/* Mensagem de Feedback */}
-      {mensagem && (
-        <div
-          className={`p-4 rounded-xl text-sm font-medium ${
-            mensagem.tipo === 'sucesso'
-              ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-              : 'bg-rose-50 text-rose-800 border border-rose-200'
-          }`}
-        >
-          {mensagem.texto}
-        </div>
-      )}
+      <Aviso mensagem={mensagem} />
 
-      {/* Tabela / Lista de Locais */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm text-slate-700">
             <thead className="bg-slate-50 text-xs font-bold text-slate-500 uppercase border-b border-slate-200">
               <tr>
-                <th className="px-6 py-4">Ordem</th>
-                <th className="px-6 py-4">Nome do Local</th>
-                <th className="px-6 py-4">Tipo</th>
-                <th className="px-6 py-4">Status</th>
-                <th className="px-6 py-4 text-right">Ações</th>
+                <th className="px-4 sm:px-6 py-4">Ordem</th>
+                <th className="px-4 sm:px-6 py-4">Local</th>
+                <th className="px-4 sm:px-6 py-4">Tipo</th>
+                <th className="px-4 sm:px-6 py-4">Situação</th>
+                <th className="px-4 sm:px-6 py-4 text-right">Ações</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 font-medium">
               {locais.map((local) => (
-                <tr key={local.id} className="hover:bg-slate-50/80 transition">
-                  <td className="px-6 py-4 text-slate-400 font-semibold">{local.ordemExibicao}</td>
-                  <td className="px-6 py-4 font-bold text-slate-900">
-                    {editingId === local.id ? (
+                <tr key={local.id} className={`hover:bg-slate-50/80 transition ${local.ativo ? '' : 'text-slate-400'}`}>
+                  <td className="px-4 sm:px-6 py-3 text-slate-400 font-semibold">{local.ordemExibicao}</td>
+                  <td className="px-4 sm:px-6 py-3 font-bold text-slate-900">
+                    {editandoId === local.id ? (
                       <div className="flex items-center gap-2">
                         <input
                           type="text"
-                          value={novoNomeInput}
-                          onChange={(e) => setNovoNomeInput(e.target.value)}
-                          className="px-3 py-1 bg-white border border-slate-300 rounded-lg text-sm font-bold text-slate-900 outline-none focus:ring-2 focus:ring-[#1F6D2E]"
+                          value={nomeEdicao}
+                          onChange={(e) => setNomeEdicao(e.target.value)}
+                          className="px-3 py-1 bg-white border border-slate-300 rounded-lg text-sm font-bold outline-none focus:ring-2 focus:ring-[#1F6D2E]"
+                          autoFocus
                         />
                         <button
-                          onClick={() => salvarEdicaoNome(local.id)}
+                          onClick={() => nomeEdicao.trim() && atualizar(local, { nome: nomeEdicao.trim() }, 'Nome do local atualizado.')}
                           className="p-1.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700"
-                          title="Salvar"
+                          aria-label="Salvar nome"
                         >
                           <Check className="w-4 h-4" />
                         </button>
-                        <button
-                          onClick={() => setEditingId(null)}
-                          className="p-1.5 bg-slate-200 text-slate-700 rounded-lg hover:bg-slate-300"
-                          title="Cancelar"
-                        >
+                        <button onClick={() => setEditandoId(null)} className="p-1.5 bg-slate-200 text-slate-700 rounded-lg hover:bg-slate-300" aria-label="Cancelar">
                           <X className="w-4 h-4" />
                         </button>
                       </div>
@@ -182,51 +123,35 @@ export default function SupervisorLocaisPage() {
                         {local.nome}
                         <button
                           onClick={() => {
-                            setEditingId(local.id);
-                            setNovoNomeInput(local.nome);
+                            setEditandoId(local.id);
+                            setNomeEdicao(local.nome);
                           }}
                           className="text-slate-400 hover:text-[#1F6D2E] p-1 rounded"
-                          title="Renomear inline"
+                          aria-label={`Renomear ${local.nome}`}
                         >
                           <Edit2 className="w-3.5 h-3.5" />
                         </button>
                       </span>
                     )}
                   </td>
-                  <td className="px-6 py-4">
-                    <span className="bg-slate-100 text-slate-700 text-xs px-2.5 py-1 rounded-md font-semibold">
-                      {local.tipo}
-                    </span>
+                  <td className="px-4 sm:px-6 py-3">
+                    <span className="bg-slate-100 text-slate-700 text-xs px-2.5 py-1 rounded-md font-semibold">{TIPOS[local.tipo] ?? local.tipo}</span>
                   </td>
-                  <td className="px-6 py-4">
-                    <span
-                      className={`text-xs font-bold px-2.5 py-0.5 rounded-full ${
-                        local.ativo
-                          ? 'bg-emerald-100 text-emerald-800'
-                          : 'bg-slate-200 text-slate-600'
-                      }`}
-                    >
+                  <td className="px-4 sm:px-6 py-3">
+                    <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full ${local.ativo ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600'}`}>
                       {local.ativo ? 'Ativo' : 'Inativo'}
                     </span>
                   </td>
-                  <td className="px-6 py-4 text-right">
-                    {local.ativo ? (
-                      <button
-                        onClick={() => inativarLocal(local.id)}
-                        className="px-3 py-1.5 bg-rose-50 text-rose-700 hover:bg-rose-100 rounded-lg font-semibold text-xs transition flex items-center gap-1 ml-auto"
-                      >
-                        <PowerOff className="w-3.5 h-3.5" />
-                        Inativar
-                      </button>
-                    ) : (
-                      <button
-                        onClick={() => reativarLocal(local.id)}
-                        className="px-3 py-1.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-lg font-semibold text-xs transition flex items-center gap-1 ml-auto"
-                      >
-                        <Power className="w-3.5 h-3.5" />
-                        Reativar
-                      </button>
-                    )}
+                  <td className="px-4 sm:px-6 py-3 text-right">
+                    <button
+                      onClick={() => atualizar(local, { ativo: !local.ativo }, local.ativo ? `"${local.nome}" inativado.` : `"${local.nome}" reativado.`)}
+                      className={`px-3 py-1.5 rounded-lg font-semibold text-xs transition inline-flex items-center gap-1 ${
+                        local.ativo ? 'bg-rose-50 text-rose-700 hover:bg-rose-100' : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                      }`}
+                    >
+                      {local.ativo ? <PowerOff className="w-3.5 h-3.5" /> : <Power className="w-3.5 h-3.5" />}
+                      {local.ativo ? 'Inativar' : 'Reativar'}
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -235,54 +160,40 @@ export default function SupervisorLocaisPage() {
         </div>
       </div>
 
-      {/* Modal Adicionar Local */}
-      {mostrarModalAdd && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fadeIn">
+      {modalNovo && (
+        <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center p-4 z-50" role="dialog" aria-modal="true">
           <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl border border-slate-200">
-            <h3 className="text-xl font-bold text-slate-900 mb-4">Adicionar Novo Local</h3>
-
-            <form onSubmit={criarLocal} className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-slate-600 uppercase mb-1">
-                  Nome do Local
-                </label>
+            <h3 className="text-xl font-bold text-slate-900 mb-4">Adicionar local</h3>
+            <form onSubmit={criar} className="space-y-4">
+              <label className="block text-xs font-bold text-slate-600 uppercase">
+                Nome
                 <input
                   type="text"
                   required
-                  placeholder="Ex: Andar 17 ou COI3"
-                  value={addNome}
-                  onChange={(e) => setAddNome(e.target.value)}
-                  className="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-[#1F6D2E] outline-none text-sm font-semibold"
+                  placeholder="Ex.: Andar 17"
+                  value={novoNome}
+                  onChange={(e) => setNovoNome(e.target.value)}
+                  className="mt-1 w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-[#1F6D2E] outline-none text-sm font-semibold normal-case"
+                  autoFocus
                 />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-600 uppercase mb-1">
-                  Tipo do Local
-                </label>
+              </label>
+              <label className="block text-xs font-bold text-slate-600 uppercase">
+                Tipo
                 <select
-                  value={addTipo}
-                  onChange={(e: any) => setAddTipo(e.target.value)}
-                  className="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-[#1F6D2E] outline-none text-sm font-semibold bg-white"
+                  value={novoTipo}
+                  onChange={(e) => setNovoTipo(e.target.value as 'Andar' | 'AreaComum')}
+                  className="mt-1 w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-[#1F6D2E] outline-none text-sm font-semibold bg-white normal-case"
                 >
                   <option value="Andar">Andar</option>
-                  <option value="AreaComum">Área Comum</option>
+                  <option value="AreaComum">Área comum</option>
                 </select>
-              </div>
-
+              </label>
               <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setMostrarModalAdd(false)}
-                  className="px-4 py-2 text-slate-600 font-semibold text-sm hover:bg-slate-100 rounded-lg transition"
-                >
+                <button type="button" onClick={() => setModalNovo(false)} className="px-4 py-2 text-slate-600 font-semibold text-sm hover:bg-slate-100 rounded-lg">
                   Cancelar
                 </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 bg-[#1F6D2E] text-white font-semibold text-sm rounded-lg hover:bg-[#175423] transition shadow"
-                >
-                  Salvar Local
+                <button type="submit" className="px-5 py-2 bg-[#1F6D2E] text-white font-semibold text-sm rounded-lg hover:bg-[#175423] shadow">
+                  Salvar
                 </button>
               </div>
             </form>
@@ -290,5 +201,13 @@ export default function SupervisorLocaisPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function SupervisorLocaisPage() {
+  return (
+    <Protegido perfis={['Supervisor']}>
+      <GerenciarLocais />
+    </Protegido>
   );
 }

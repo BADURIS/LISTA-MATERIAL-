@@ -1,7 +1,12 @@
 'use client';
 
-import AlmoxarifeSemanaAtual from '@/components/AlmoxarifeSemanaAtual';
+import SemanaEmAndamento from '@/components/SemanaEmAndamento';
+import { Protegido } from '@/components/ui';
 
 export default function AlmoxarifeSemanaAtualPage() {
-  return <AlmoxarifeSemanaAtual isReadOnly={false} />;
+  return (
+    <Protegido perfis={['Almoxarife']}>
+      <SemanaEmAndamento modo="almoxarife" />
+    </Protegido>
+  );
 }

@@ -1,89 +1,62 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
+import { lerSessao, login as loginApi, logout as logoutApi, Perfil, Usuario } from '@/lib/api';
 
-export interface User {
-  id: string;
-  nome: string;
-  role: 'Supervisor' | 'Almoxarife' | 'Gestor';
-}
+export type { Perfil, Usuario };
+
+// Página inicial de cada perfil
+export const PAGINA_INICIAL: Record<Perfil, string> = {
+  Supervisor: '/supervisor/nova-semana',
+  Coordenador: '/coordenador/retirada',
+  Almoxarife: '/almoxarife/semana-atual',
+  Gestor: '/gestor/consumo',
+};
 
 interface AuthContextType {
-  user: User | null;
-  token: string | null;
-  login: (role: User['role'], username?: string, email?: string, password?: string) => Promise<void>;
-  logout: () => void;
+  user: Usuario | null;
+  login: (username: string, password: string) => Promise<void>;
+  logout: () => Promise<void>;
   loading: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [token, setToken] = useState<string | null>(null);
+  const [user, setUser] = useState<Usuario | null>(null);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
+  const pathname = usePathname();
 
   useEffect(() => {
-    const storedToken = localStorage.getItem('normatel_token');
-    const storedUser = localStorage.getItem('normatel_user');
-
-    if (storedToken && storedUser) {
-      setToken(storedToken);
-      setUser(JSON.parse(storedUser));
-    }
+    setUser(lerSessao());
     setLoading(false);
   }, []);
 
-  const login = async (role: User['role'], username?: string, email?: string, password?: string) => {
-    try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || ''}/api/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ role, username: username || `Usuário ${role}`, email, password }),
-      });
-
-      const data = await res.json();
-      if (res.ok && data.token) {
-        localStorage.setItem('normatel_token', data.token);
-        localStorage.setItem('normatel_user', JSON.stringify(data.user));
-        setToken(data.token);
-        setUser(data.user);
-
-        // Redirecionamento por papel
-        switch (role) {
-          case 'Supervisor':
-            router.push('/supervisor/nova-semana');
-            break;
-          case 'Almoxarife':
-            router.push('/almoxarife/semana-atual');
-            break;
-          case 'Gestor':
-            router.push('/gestor/consumo');
-            break;
-        }
-      } else {
-        alert(data.message || 'Erro ao realizar login');
-      }
-    } catch (err: any) {
-      alert('Erro de conexão com o servidor API. Verifique se o backend está rodando.');
+  // Sem sessão, qualquer página leva ao login
+  useEffect(() => {
+    if (!loading && !user && pathname !== '/login') {
+      router.replace('/login');
     }
-  };
+  }, [loading, user, pathname, router]);
 
-  const logout = () => {
-    localStorage.removeItem('normatel_token');
-    localStorage.removeItem('normatel_user');
-    setToken(null);
+  const login = useCallback(
+    async (username: string, password: string) => {
+      const usuario = await loginApi(username.trim(), password);
+      setUser(usuario);
+      router.push(PAGINA_INICIAL[usuario.role] ?? '/');
+    },
+    [router]
+  );
+
+  const logout = useCallback(async () => {
+    await logoutApi();
     setUser(null);
     router.push('/login');
-  };
+  }, [router]);
 
-  return (
-    <AuthContext.Provider value={{ user, token, login, logout, loading }}>
-      {children}
-    </AuthContext.Provider>
-  );
+  return <AuthContext.Provider value={{ user, login, logout, loading }}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {

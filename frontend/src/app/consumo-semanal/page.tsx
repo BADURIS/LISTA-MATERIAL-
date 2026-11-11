@@ -87,7 +87,7 @@ export default function ConsumoSemanalPage() {
       setLoading(true);
       setErro(null);
       try {
-        const data = await fetchApi<ConsumoSemanal>(`/api/consumo-semanal?semanas=${quantidadeSemanas}`);
+        const data = await fetchApi<ConsumoSemanal>(`/api/consumo/semanal?semanas=${quantidadeSemanas}`);
         setDados(data);
         // Começa mostrando os 3 materiais que mais aumentaram
         const iniciais: Record<string, number> = {};

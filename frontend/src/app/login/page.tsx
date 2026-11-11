@@ -1,199 +1,158 @@
 'use client';
 
-import React, { useState } from 'react';
-import { useAuth, User } from '@/context/AuthContext';
-import { ShieldCheck, Package, ClipboardCheck, BarChart3, Lock, Mail, User as UserIcon } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { useAuth, PAGINA_INICIAL } from '@/context/AuthContext';
+import { ShieldCheck, Lock, User as UserIcon, Package, ClipboardCheck, BarChart3, UserCheck } from 'lucide-react';
+
+const PERFIS = [
+  {
+    username: 'supervisor',
+    titulo: 'Supervisor',
+    desc: 'Cria a semana, faz os pedidos por local e envia ao almoxarifado.',
+    icon: <Package className="w-5 h-5 text-[#1F6D2E]" />,
+  },
+  {
+    username: 'coordenador',
+    titulo: 'Coordenador',
+    desc: 'Ajuda nos pedidos, confirma o recebimento e registra a retirada.',
+    icon: <UserCheck className="w-5 h-5 text-amber-700" />,
+  },
+  {
+    username: 'almoxarife',
+    titulo: 'Almoxarife',
+    desc: 'Separa os materiais e informa as quantidades e faltas.',
+    icon: <ClipboardCheck className="w-5 h-5 text-blue-700" />,
+  },
+  {
+    username: 'gestor',
+    titulo: 'Gestor',
+    desc: 'Acompanha consumo, histórico e exporta planilhas.',
+    icon: <BarChart3 className="w-5 h-5 text-purple-700" />,
+  },
+];
 
 export default function LoginPage() {
-  const { login } = useAuth();
-  const [email, setEmail] = useState('');
+  const { user, loading, login } = useAuth();
+  const router = useRouter();
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [nome, setNome] = useState('');
-  const [selectedRole, setSelectedRole] = useState<User['role']>('Supervisor');
+  const [erro, setErro] = useState<string | null>(null);
+  const [entrando, setEntrando] = useState(false);
 
-  const handleFormLogin = (e: React.FormEvent) => {
+  // Já logado: vai direto para a página do perfil
+  useEffect(() => {
+    if (!loading && user) router.replace(PAGINA_INICIAL[user.role]);
+  }, [loading, user, router]);
+
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('expirou')) {
+      setErro('Sua sessão expirou. Entre novamente.');
+    }
+  }, []);
+
+  const entrar = async (e: React.FormEvent) => {
     e.preventDefault();
-    login(selectedRole, nome || email.split('@')[0] || `Usuário ${selectedRole}`, email, password);
+    setErro(null);
+    setEntrando(true);
+    try {
+      await login(username, password);
+    } catch (err: any) {
+      setErro(err.message || 'Não foi possível entrar. Verifique se o servidor está rodando.');
+    } finally {
+      setEntrando(false);
+    }
   };
-
-  const preencherDemo = (role: User['role']) => {
-    const demoEmails: Record<User['role'], string> = {
-      Supervisor: 'supervisor@normatel.com.br',
-      Almoxarife: 'almoxarife@normatel.com.br',
-      Gestor: 'gestor@normatel.com.br',
-    };
-    const demoNomes: Record<User['role'], string> = {
-      Supervisor: 'Carlos Silva (Supervisor)',
-      Almoxarife: 'João Almoxarife',
-      Gestor: 'Roberto Gestor',
-    };
-
-    setEmail(demoEmails[role]);
-    setPassword('123456');
-    setNome(demoNomes[role]);
-    setSelectedRole(role);
-    login(role, demoNomes[role], demoEmails[role], '123456');
-  };
-
-  const roles: { role: User['role']; title: string; desc: string; icon: React.ReactNode; badgeColor: string }[] = [
-    {
-      role: 'Supervisor',
-      title: 'Supervisor',
-      desc: 'Cria semanas, preenche solicitações de materiais por local e envia para separação.',
-      icon: <Package className="w-6 h-6 text-[#1F6D2E]" />,
-      badgeColor: 'bg-emerald-100 text-[#173404] border-emerald-300',
-    },
-    {
-      role: 'Almoxarife',
-      title: 'Almoxarife',
-      desc: 'Informa a quantidade separada de cada item, aponta faltas, confirma listas e registra retiradas.',
-      icon: <ClipboardCheck className="w-6 h-6 text-blue-700" />,
-      badgeColor: 'bg-blue-100 text-blue-900 border-blue-300',
-    },
-    {
-      role: 'Gestor',
-      title: 'Gestor',
-      desc: 'Somente consulta: acompanha listas, consumo e histórico e exporta as tabelas em Excel/PDF.',
-      icon: <BarChart3 className="w-6 h-6 text-purple-700" />,
-      badgeColor: 'bg-purple-100 text-purple-900 border-purple-300',
-    },
-  ];
 
   return (
-    <div className="min-h-[85vh] flex flex-col items-center justify-center py-8 px-4 sm:px-6 lg:px-8">
-      {/* Header Branding */}
+    <div className="min-h-[85vh] flex flex-col items-center justify-center py-8">
       <div className="max-w-md w-full text-center mb-6">
         <div className="mx-auto w-16 h-16 bg-[#1F6D2E] text-white rounded-2xl flex items-center justify-center text-3xl font-black shadow-lg mb-3">
           N
         </div>
-        <h2 className="text-3xl font-extrabold text-slate-900 tracking-tight">NORMATEL ENGENHARIA</h2>
-        <p className="mt-1 text-sm text-slate-600 font-medium">
-          Gestão de Listas de Material Semanais
-        </p>
+        <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">NORMATEL ENGENHARIA</h1>
+        <p className="mt-1 text-sm text-slate-600 font-medium">Gestão de Listas de Material Semanais</p>
       </div>
 
-      <div className="bg-white p-8 rounded-2xl shadow-xl border border-slate-200 w-full max-w-2xl space-y-6">
-        
-        {/* Form de Login com Credenciais */}
-        <form onSubmit={handleFormLogin} className="space-y-4 border-b border-slate-100 pb-6">
-          <div className="flex items-center justify-between">
-            <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-              <ShieldCheck className="w-5 h-5 text-[#1F6D2E]" />
-              Login com Credenciais de Acesso
-            </h3>
-            <span className="text-xs font-semibold text-slate-400">Campos Obrigatórios</span>
-          </div>
+      <div className="bg-white p-6 sm:p-8 rounded-2xl shadow-xl border border-slate-200 w-full max-w-md space-y-6">
+        <form onSubmit={entrar} className="space-y-4">
+          <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+            <ShieldCheck className="w-5 h-5 text-[#1F6D2E]" />
+            Entrar no sistema
+          </h2>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                E-mail de Acesso
-              </label>
-              <div className="relative">
-                <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
-                <input
-                  type="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="supervisor@normatel.com.br"
-                  className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm font-medium outline-none focus:ring-2 focus:ring-[#1F6D2E]"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Senha
-              </label>
-              <div className="relative">
-                <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
-                <input
-                  type="password"
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm font-medium outline-none focus:ring-2 focus:ring-[#1F6D2E]"
-                />
-              </div>
+          <div>
+            <label htmlFor="usuario" className="block text-xs font-semibold text-slate-700 mb-1">
+              Usuário
+            </label>
+            <div className="relative">
+              <UserIcon className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+              <input
+                id="usuario"
+                type="text"
+                required
+                autoComplete="username"
+                autoCapitalize="none"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder="ex.: supervisor"
+                className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm font-medium outline-none focus:ring-2 focus:ring-[#1F6D2E]"
+              />
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Nome do Usuário (Opcional)
-              </label>
-              <div className="relative">
-                <UserIcon className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
-                <input
-                  type="text"
-                  value={nome}
-                  onChange={(e) => setNome(e.target.value)}
-                  placeholder="Ex: Carlos Silva"
-                  className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm font-medium outline-none focus:ring-2 focus:ring-[#1F6D2E]"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Papel / Perfil
-              </label>
-              <select
-                value={selectedRole}
-                onChange={(e: any) => setSelectedRole(e.target.value)}
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm font-semibold outline-none focus:ring-2 focus:ring-[#1F6D2E]"
-              >
-                <option value="Supervisor">Supervisor</option>
-                <option value="Almoxarife">Almoxarife</option>
-                <option value="Gestor">Gestor</option>
-              </select>
+          <div>
+            <label htmlFor="senha" className="block text-xs font-semibold text-slate-700 mb-1">
+              Senha
+            </label>
+            <div className="relative">
+              <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+              <input
+                id="senha"
+                type="password"
+                required
+                autoComplete="current-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm font-medium outline-none focus:ring-2 focus:ring-[#1F6D2E]"
+              />
             </div>
           </div>
+
+          {erro && (
+            <p role="alert" className="text-sm font-medium text-rose-700 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2">
+              {erro}
+            </p>
+          )}
 
           <button
             type="submit"
-            className="w-full py-3 bg-[#1F6D2E] hover:bg-[#175423] text-white font-bold text-sm rounded-xl transition shadow-md flex items-center justify-center gap-2 mt-2"
+            disabled={entrando}
+            className="w-full py-3 bg-[#1F6D2E] hover:bg-[#175423] disabled:opacity-60 text-white font-bold text-sm rounded-xl transition shadow-md"
           >
-            Entrar no Sistema &rarr;
+            {entrando ? 'Entrando...' : 'Entrar'}
           </button>
         </form>
 
-        {/* Seleção Rápida de Papel para Testes */}
         <div>
-          <p className="text-left text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">
-            Ou selecione um perfil de teste pré-configurado
-          </p>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            {roles.map((item) => (
+          <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Perfis de acesso</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {PERFIS.map((p) => (
               <button
-                key={item.role}
+                key={p.username}
                 type="button"
-                onClick={() => preencherDemo(item.role)}
-                className="text-left p-4 rounded-xl border border-slate-200 hover:border-[#1F6D2E] hover:shadow-md transition-all duration-200 bg-white hover:bg-slate-50 flex flex-col justify-between group"
+                onClick={() => {
+                  setUsername(p.username);
+                  document.getElementById('senha')?.focus();
+                }}
+                className="text-left p-3 rounded-xl border border-slate-200 hover:border-[#1F6D2E] hover:bg-slate-50 transition"
+                title={`Preencher o usuário "${p.username}"`}
               >
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="p-2 rounded-lg bg-slate-100 group-hover:bg-white transition shadow-xs">
-                      {item.icon}
-                    </div>
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${item.badgeColor}`}>
-                      {item.title}
-                    </span>
-                  </div>
-                  <h3 className="font-bold text-sm text-slate-900 group-hover:text-[#1F6D2E] transition">
-                    {item.title}
-                  </h3>
-                  <p className="text-xs text-slate-500 mt-1 leading-relaxed line-clamp-2">
-                    {item.desc}
-                  </p>
+                <div className="flex items-center gap-2 font-bold text-sm text-slate-900">
+                  {p.icon}
+                  {p.titulo}
                 </div>
-                <div className="mt-3 pt-2 border-t border-slate-100 text-[11px] font-semibold text-[#1F6D2E] flex items-center justify-end gap-1">
-                  Entrar como {item.title} &rarr;
-                </div>
+                <p className="text-[11px] text-slate-500 mt-1 leading-snug">{p.desc}</p>
               </button>
             ))}
           </div>
