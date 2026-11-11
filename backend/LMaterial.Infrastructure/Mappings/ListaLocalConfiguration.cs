@@ -33,6 +33,10 @@ public class ListaLocalConfiguration : IEntityTypeConfiguration<ListaLocal>
         builder.Property(l => l.AssinaturaDigital)
             .HasMaxLength(100);
 
+        builder.Property(l => l.SemPedido)
+            .IsRequired()
+            .HasDefaultValue(false);
+
         // Relacionamento com Local (Muitas listas podem referenciar o mesmo local, mas não há navegação inversa obrigatória no Local)
         builder.HasOne(l => l.Local)
             .WithMany()

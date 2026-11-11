@@ -21,6 +21,9 @@ public class ListaLocal
     public Guid? RegistradoPorUsuarioId { get; private set; }
     public string? AssinaturaDigital { get; private set; }
 
+    // Marcado quando o local não precisa de material na semana: conta como preenchido e fica fora da separação
+    public bool SemPedido { get; private set; }
+
     // Relações de Navegação
     public virtual Local? Local { get; private set; }
     public IReadOnlyCollection<ListaLocalItem> Itens => _itens.AsReadOnly();
@@ -100,7 +103,81 @@ public class ListaLocal
 
         var novoItem = ListaLocalItem.Create(Id, materialId, quantidadeSolicitada);
         _itens.Add(novoItem);
+        SemPedido = false;
     }
+
+    // Um local está pronto para envio quando tem ao menos um item solicitado ou foi marcado como sem pedido
+    public bool EstaPreenchida => SemPedido || _itens.Count > 0;
+
+    // Substitui o pedido do local de uma só vez (tela de preenchimento). Quantidade zero remove o material do pedido.
+    // Os itens que continuam no pedido mantêm o mesmo Id.
+    public void DefinirItens(IEnumerable<(Guid MaterialId, int Quantidade)> itens)
+    {
+        if (itens == null)
+            throw new DomainException("Os itens do pedido são obrigatórios.");
+
+        if (Status != StatusListaLocal.Pendente)
+            throw new DomainException("O pedido deste local não pode mais ser alterado.");
+
+        var pedido = itens.ToList();
+
+        if (pedido.Any(i => i.MaterialId == Guid.Empty))
+            throw new DomainException("O Id do material é obrigatório.");
+
+        if (pedido.Any(i => i.Quantidade < 0))
+            throw new DomainException("A quantidade solicitada não pode ser negativa.");
+
+        if (pedido.GroupBy(i => i.MaterialId).Any(g => g.Count() > 1))
+            throw new DomainException("O mesmo material foi informado mais de uma vez no pedido.");
+
+        var desejado = pedido.Where(i => i.Quantidade > 0).ToDictionary(i => i.MaterialId, i => i.Quantidade);
+
+        _itens.RemoveAll(i => !desejado.ContainsKey(i.MaterialId));
+
+        foreach (var (materialId, quantidade) in desejado)
+        {
+            var existente = _itens.FirstOrDefault(i => i.MaterialId == materialId);
+            if (existente != null)
+                existente.AtualizarQuantidadeSolicitada(quantidade);
+            else
+                _itens.Add(ListaLocalItem.Create(Id, materialId, quantidade));
+        }
+
+        if (_itens.Count > 0)
+            SemPedido = false;
+    }
+
+    // Marcar como sem pedido zera o pedido do local
+    public void DefinirSemPedido(bool semPedido)
+    {
+        if (Status != StatusListaLocal.Pendente)
+            throw new DomainException("O pedido deste local não pode mais ser alterado.");
+
+        if (semPedido)
+            _itens.Clear();
+
+        SemPedido = semPedido;
+    }
+
+    // Registro da quantidade separada de um item pelo almoxarife, enquanto a lista ainda não foi fechada
+    public void RegistrarSeparacaoItem(Guid itemId, int quantidadeSeparada, string? observacao)
+    {
+        if (SemPedido)
+            throw new DomainException("Este local está sem pedido nesta semana e não tem nada a separar.");
+
+        if (Status != StatusListaLocal.Pendente)
+            throw new DomainException("A separação deste local já foi concluída e não pode mais ser alterada.");
+
+        var item = _itens.FirstOrDefault(i => i.Id == itemId)
+            ?? throw new DomainException("Item não encontrado nesta lista.");
+
+        if (quantidadeSeparada > item.QuantidadeSolicitada)
+            throw new DomainException($"A quantidade separada ({quantidadeSeparada}) não pode ser maior que a solicitada ({item.QuantidadeSolicitada}).");
+
+        item.RegistrarSeparacao(quantidadeSeparada, string.IsNullOrWhiteSpace(observacao) ? null : observacao.Trim());
+    }
+
+    public bool TodosItensComQuantidadeSeparada => _itens.Count > 0 && _itens.All(i => i.QuantidadeSeparada.HasValue);
 
     public void RegistrarSeparacao(Guid almoxarifeId, DateTime dataSeparacao)
     {
@@ -123,7 +200,9 @@ public class ListaLocal
         if (Status != StatusListaLocal.Separado)
             throw new DomainException("A lista só pode ser confirmada se já tiver sido separada.");
 
-        Status = possuiPendencias ? StatusListaLocal.ConfirmadoComPendencia : StatusListaLocal.Confirmado;
+        // Item separado em quantidade menor que a solicitada é pendência mesmo que não seja informada
+        var temFalta = _itens.Any(i => i.StatusItem == StatusItem.Faltando);
+        Status = possuiPendencias || temFalta ? StatusListaLocal.ConfirmadoComPendencia : StatusListaLocal.Confirmado;
     }
 
     public void RegistrarRetirada(string nomeRetiradoPor, DateTime dataRetirada, Guid? registradoPorUsuarioId = null)

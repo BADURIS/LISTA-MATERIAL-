@@ -152,6 +152,7 @@ builder.Services.AddScoped<ILocalService, LocalService>();
 builder.Services.AddScoped<ISemanaListaService, SemanaListaService>();
 builder.Services.AddScoped<INotificacaoService, NotificacaoService>();
 builder.Services.AddScoped<IPlanilhaSemanaService, PlanilhaSemanaService>();
+builder.Services.AddScoped<LMaterial.Application.Services.Consumo.IConsumoService, LMaterial.Application.Services.Consumo.ConsumoService>();
 
 // 9. Registro do FluentValidation (Assembly Scan)
 builder.Services.AddValidatorsFromAssemblyContaining<CreateMaterialRequestValidator>();
@@ -182,9 +183,8 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
+// A interface fica no projeto Next.js (pasta frontend), que repassa /api para esta API
 app.UseHttpsRedirection();
-app.UseDefaultFiles();
-app.UseStaticFiles();
 
 app.UseCors("FrontendPolicy");
 app.UseRateLimiter();

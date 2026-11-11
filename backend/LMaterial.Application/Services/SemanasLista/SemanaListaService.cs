@@ -40,9 +40,28 @@ public class SemanaListaService : ISemanaListaService
         _unitOfWork = unitOfWork ?? throw new ArgumentNullException(nameof(unitOfWork));
     }
 
+    // A semana já nasce com todos os locais ativos, prontos para receber o pedido
     public async Task<SemanaListaDto> CriarSemanaAsync(CriarSemanaRequest request, Guid supervisorId, CancellationToken ct = default)
     {
+        var emAndamento = await _semanaListaRepository.GetSemanaAtualAsync(ct);
+        if (emAndamento != null)
+        {
+            throw new DomainException(
+                $"Já existe uma semana em andamento ({emAndamento.DataInicio:dd/MM/yyyy} a {emAndamento.DataFim:dd/MM/yyyy}). " +
+                "Conclua as retiradas dela antes de criar uma nova.");
+        }
+
         var semana = SemanaLista.Create(request.DataInicio, request.DataFim, supervisorId);
+
+        var locaisAtivos = (await _localRepository.GetAtivosAsync(ct)).OrderBy(l => l.OrdemExibicao).ToList();
+        if (locaisAtivos.Count == 0)
+            throw new DomainException("Não há locais ativos cadastrados para montar a semana.");
+
+        foreach (var local in locaisAtivos)
+        {
+            semana.AdicionarListaLocal(local.Id);
+        }
+
         await _semanaListaRepository.AddAsync(semana, ct);
         await _unitOfWork.SaveChangesAsync(ct);
 
@@ -51,27 +70,24 @@ public class SemanaListaService : ISemanaListaService
 
     public async Task<SemanaListaDto> AdicionarLocalAsync(Guid semanaId, AdicionarLocalRequest request, CancellationToken ct = default)
     {
-        var semana = await _semanaListaRepository.GetByIdAsync(semanaId, ct)
-            ?? throw new DomainException("Semana de lista não encontrada.");
+        var semana = await ObterSemanaAsync(semanaId, ct);
 
-        var local = await _localRepository.GetByIdAsync(request.LocalId, ct)
+        _ = await _localRepository.GetByIdAsync(request.LocalId, ct)
             ?? throw new DomainException("Local não encontrado.");
 
         semana.AdicionarListaLocal(request.LocalId);
 
-        await _semanaListaRepository.UpdateAsync(semana, ct);
-        await _unitOfWork.SaveChangesAsync(ct);
-
-        var semanaAtualizada = await _semanaListaRepository.GetByIdAsync(semanaId, ct) ?? semana;
-        return await MapToDtoAsync(semanaAtualizada, ct);
+        return await SalvarERetornarAsync(semana, ct);
     }
 
     public async Task<SemanaListaDto> AdicionarItemAsync(Guid semanaId, AdicionarItemRequest request, CancellationToken ct = default)
     {
-        var semana = await _semanaListaRepository.GetByIdAsync(semanaId, ct)
-            ?? throw new DomainException("Semana de lista não encontrada.");
+        var semana = await ObterSemanaAsync(semanaId, ct);
 
-        var material = await _materialRepository.GetByIdAsync(request.MaterialId, ct)
+        if (semana.Status != StatusSemanaLista.EmMontagem)
+            throw new DomainException("A semana já foi enviada ao almoxarifado: os pedidos não podem mais ser alterados.");
+
+        _ = await _materialRepository.GetByIdAsync(request.MaterialId, ct)
             ?? throw new DomainException("Material não encontrado.");
 
         ListaLocal? listaLocal = null;
@@ -85,82 +101,85 @@ public class SemanaListaService : ISemanaListaService
         }
 
         if (listaLocal == null)
-        {
             throw new DomainException("Lista local não encontrada para esta semana.");
-        }
 
         listaLocal.AdicionarItem(request.MaterialId, request.QuantidadeSolicitada);
 
-        await _semanaListaRepository.UpdateAsync(semana, ct);
-        await _unitOfWork.SaveChangesAsync(ct);
+        return await SalvarERetornarAsync(semana, ct);
+    }
 
-        var semanaAtualizada = await _semanaListaRepository.GetByIdAsync(semanaId, ct) ?? semana;
-        return await MapToDtoAsync(semanaAtualizada, ct);
+    public async Task<SemanaListaDto> PreencherLocalAsync(Guid semanaId, Guid localId, PreencherLocalRequest request, CancellationToken ct = default)
+    {
+        var semana = await ObterSemanaAsync(semanaId, ct);
+        var itens = request?.Itens ?? new List<ItemPedidoRequest>();
+
+        // Só materiais ativos do cadastro podem ser pedidos
+        var materiaisAtivos = (await _materialRepository.GetAtivosAsync(ct)).Select(m => m.Id).ToHashSet();
+        var desconhecido = itens.FirstOrDefault(i => i.QuantidadeSolicitada > 0 && !materiaisAtivos.Contains(i.MaterialId));
+        if (desconhecido != null)
+            throw new DomainException("O pedido contém um material inexistente ou inativo.");
+
+        semana.PreencherLocal(localId, itens.Select(i => (i.MaterialId, i.QuantidadeSolicitada)));
+
+        return await SalvarERetornarAsync(semana, ct);
+    }
+
+    public async Task<SemanaListaDto> DefinirSemPedidoAsync(Guid semanaId, Guid localId, DefinirSemPedidoRequest request, CancellationToken ct = default)
+    {
+        var semana = await ObterSemanaAsync(semanaId, ct);
+        semana.DefinirSemPedido(localId, request.SemPedido);
+        return await SalvarERetornarAsync(semana, ct);
     }
 
     public async Task<SemanaListaDto> EnviarParaSeparacaoAsync(Guid semanaId, CancellationToken ct = default)
     {
-        var semana = await _semanaListaRepository.GetByIdAsync(semanaId, ct)
-            ?? throw new DomainException("Semana de lista não encontrada.");
+        var semana = await ObterSemanaAsync(semanaId, ct);
 
         semana.EnviarParaSeparacao();
 
-        await _semanaListaRepository.UpdateAsync(semana, ct);
-        await _unitOfWork.SaveChangesAsync(ct);
+        await NotificarPerfisAsync(
+            semana,
+            $"Lista da semana {semana.DataInicio:dd/MM/yyyy} a {semana.DataFim:dd/MM/yyyy} enviada para separação.",
+            PerfilUsuario.Almoxarife);
 
-        var semanaAtualizada = await _semanaListaRepository.GetByIdAsync(semanaId, ct) ?? semana;
-        return await MapToDtoAsync(semanaAtualizada, ct);
+        return await SalvarERetornarAsync(semana, ct);
     }
 
+    // O almoxarife informa a quantidade separada item a item. Uma lista local fica "Separada" quando todos os seus
+    // itens têm quantidade informada; a semana conclui a separação quando todas as listas com pedido estão separadas.
     public async Task<SemanaListaDto> RegistrarSeparacaoAsync(Guid semanaId, RegistrarSeparacaoRequest request, Guid almoxarifeId, CancellationToken ct = default)
     {
-        var semana = await _semanaListaRepository.GetByIdAsync(semanaId, ct)
-            ?? throw new DomainException("Semana de lista não encontrada.");
+        var semana = await ObterSemanaAsync(semanaId, ct);
 
         if (semana.Status != StatusSemanaLista.EnviadaParaSeparacao)
             throw new DomainException("A separação só pode ser registrada quando a semana estiver Enviada para Separação.");
 
+        var itens = new List<ItemSeparadoRequest>();
+        if (request.Itens != null)
+            itens.AddRange(request.Itens);
+        if (request.ItemId.HasValue && request.QuantidadeSeparada.HasValue)
+            itens.Add(new ItemSeparadoRequest(request.ItemId.Value, request.QuantidadeSeparada.Value, request.Observacao));
+
+        if (itens.Count == 0)
+            throw new DomainException("Informe ao menos um item com a quantidade separada.");
+
+        var listasAlteradas = new HashSet<ListaLocal>();
+        foreach (var itemSeparado in itens)
+        {
+            var lista = semana.ListasLocais.FirstOrDefault(l => l.Itens.Any(i => i.Id == itemSeparado.ItemId))
+                ?? throw new DomainException("Item não encontrado nesta semana.");
+
+            lista.RegistrarSeparacaoItem(itemSeparado.ItemId, itemSeparado.QuantidadeSeparada, itemSeparado.Observacao);
+            listasAlteradas.Add(lista);
+        }
+
         var dataSeparacao = DateTime.UtcNow;
-
-        if (request.Itens != null && request.Itens.Any())
+        foreach (var lista in listasAlteradas.Where(l => l.TodosItensComQuantidadeSeparada))
         {
-            foreach (var itemSeparado in request.Itens)
-            {
-                var targetLista = semana.ListasLocais.FirstOrDefault(l => l.Itens.Any(i => i.Id == itemSeparado.ItemId));
-                if (targetLista != null)
-                {
-                    var item = targetLista.Itens.First(i => i.Id == itemSeparado.ItemId);
-                    item.RegistrarSeparacao(itemSeparado.QuantidadeSeparada, itemSeparado.Observacao);
-                }
-            }
-            foreach (var lista in semana.ListasLocais)
-            {
-                MarcarListaSeTodosItensSeparados(lista, almoxarifeId, dataSeparacao);
-            }
-        }
-        else if (request.ItemId.HasValue && request.QuantidadeSeparada.HasValue)
-        {
-            var targetLista = semana.ListasLocais.FirstOrDefault(l => l.Itens.Any(i => i.Id == request.ItemId.Value));
-            if (targetLista != null)
-            {
-                var item = targetLista.Itens.First(i => i.Id == request.ItemId.Value);
-                item.RegistrarSeparacao(request.QuantidadeSeparada.Value, request.Observacao);
-                MarcarListaSeTodosItensSeparados(targetLista, almoxarifeId, dataSeparacao);
-            }
-        }
-        else
-        {
-            foreach (var lista in semana.ListasLocais)
-            {
-                if (lista.Itens.Any())
-                {
-                    lista.RegistrarSeparacao(almoxarifeId, dataSeparacao);
-                }
-            }
+            lista.RegistrarSeparacao(almoxarifeId, dataSeparacao);
         }
 
-        // Quando nenhuma lista local estiver mais pendente, a separação da semana está concluída
-        if (semana.ListasLocais.All(l => l.Status != StatusListaLocal.Pendente))
+        if (semana.ObterListasComPedido().All(l => l.Status != StatusListaLocal.Pendente))
         {
             semana.MarcarSeparacaoConcluida();
             await NotificarPerfisAsync(
@@ -170,17 +189,12 @@ public class SemanaListaService : ISemanaListaService
                 PerfilUsuario.Coordenador);
         }
 
-        await _semanaListaRepository.UpdateAsync(semana, ct);
-        await _unitOfWork.SaveChangesAsync(ct);
-
-        var semanaAtualizada = await _semanaListaRepository.GetByIdAsync(semanaId, ct) ?? semana;
-        return await MapToDtoAsync(semanaAtualizada, ct);
+        return await SalvarERetornarAsync(semana, ct);
     }
 
     public async Task<SemanaListaDto> ConfirmarRecebimentoAsync(Guid semanaId, ConfirmarRecebimentoRequest request, CancellationToken ct = default)
     {
-        var semana = await _semanaListaRepository.GetByIdAsync(semanaId, ct)
-            ?? throw new DomainException("Semana de lista não encontrada.");
+        var semana = await ObterSemanaAsync(semanaId, ct);
 
         if (request.ListaLocalId.HasValue)
         {
@@ -196,17 +210,16 @@ public class SemanaListaService : ISemanaListaService
             }
         }
 
-        await _semanaListaRepository.UpdateAsync(semana, ct);
-        await _unitOfWork.SaveChangesAsync(ct);
-
-        var semanaAtualizada = await _semanaListaRepository.GetByIdAsync(semanaId, ct) ?? semana;
-        return await MapToDtoAsync(semanaAtualizada, ct);
+        return await SalvarERetornarAsync(semana, ct);
     }
 
     public async Task<SemanaListaDto> RegistrarRetiradaAsync(Guid semanaId, RegistrarRetiradaRequest request, Guid coordenadorId, CancellationToken ct = default)
     {
-        var semana = await _semanaListaRepository.GetByIdAsync(semanaId, ct)
-            ?? throw new DomainException("Semana de lista não encontrada.");
+        var semana = await ObterSemanaAsync(semanaId, ct);
+
+        var nome = request.NomeRetiradoPor?.Trim() ?? string.Empty;
+        if (nome.Length < 3)
+            throw new DomainException("Informe o nome completo da pessoa que está retirando o material.");
 
         var dataRetirada = DateTime.UtcNow;
 
@@ -214,27 +227,29 @@ public class SemanaListaService : ISemanaListaService
         {
             var listaLocal = semana.ListasLocais.FirstOrDefault(l => l.Id == request.ListaLocalId.Value || l.LocalId == request.ListaLocalId.Value)
                 ?? throw new DomainException("Lista local não encontrada.");
-            listaLocal.RegistrarRetirada(request.NomeRetiradoPor, dataRetirada, coordenadorId);
+            listaLocal.RegistrarRetirada(nome, dataRetirada, coordenadorId);
         }
         else
         {
             foreach (var listaLocal in semana.ListasLocais.Where(l => l.Status == StatusListaLocal.Confirmado || l.Status == StatusListaLocal.ConfirmadoComPendencia))
             {
-                listaLocal.RegistrarRetirada(request.NomeRetiradoPor, dataRetirada, coordenadorId);
+                listaLocal.RegistrarRetirada(nome, dataRetirada, coordenadorId);
             }
         }
 
+        // A semana é finalizada quando todos os locais com pedido tiveram a retirada registrada
         if ((semana.Status == StatusSemanaLista.EnviadaParaSeparacao || semana.Status == StatusSemanaLista.SeparacaoConcluida) &&
-            semana.ListasLocais.All(l => l.Status == StatusListaLocal.Retirado || l.Status == StatusListaLocal.Confirmado || l.Status == StatusListaLocal.ConfirmadoComPendencia))
+            semana.ObterListasComPedido().All(l => l.Status == StatusListaLocal.Retirado))
         {
             semana.Finalizar();
+            await NotificarPerfisAsync(
+                semana,
+                $"Semana {semana.DataInicio:dd/MM/yyyy} a {semana.DataFim:dd/MM/yyyy} finalizada: todas as retiradas foram registradas.",
+                PerfilUsuario.Supervisor,
+                PerfilUsuario.Gestor);
         }
 
-        await _semanaListaRepository.UpdateAsync(semana, ct);
-        await _unitOfWork.SaveChangesAsync(ct);
-
-        var semanaAtualizada = await _semanaListaRepository.GetByIdAsync(semanaId, ct) ?? semana;
-        return await MapToDtoAsync(semanaAtualizada, ct);
+        return await SalvarERetornarAsync(semana, ct);
     }
 
     public async Task<SemanaListaDto?> GetByIdAsync(Guid semanaId, CancellationToken ct = default)
@@ -258,13 +273,19 @@ public class SemanaListaService : ISemanaListaService
             .ToList();
     }
 
-    // A lista local só fica Separada quando todos os seus itens têm quantidade separada informada
-    private static void MarcarListaSeTodosItensSeparados(ListaLocal lista, Guid almoxarifeId, DateTime dataSeparacao)
+    private async Task<SemanaLista> ObterSemanaAsync(Guid semanaId, CancellationToken ct)
     {
-        if (lista.Itens.Any() && lista.Itens.All(i => i.QuantidadeSeparada.HasValue))
-        {
-            lista.RegistrarSeparacao(almoxarifeId, dataSeparacao);
-        }
+        return await _semanaListaRepository.GetByIdAsync(semanaId, ct)
+            ?? throw new DomainException("Semana de lista não encontrada.");
+    }
+
+    private async Task<SemanaListaDto> SalvarERetornarAsync(SemanaLista semana, CancellationToken ct)
+    {
+        await _semanaListaRepository.UpdateAsync(semana, ct);
+        await _unitOfWork.SaveChangesAsync(ct);
+
+        var semanaAtualizada = await _semanaListaRepository.GetByIdAsync(semana.Id, ct) ?? semana;
+        return await MapToDtoAsync(semanaAtualizada, ct);
     }
 
     // Cria uma notificação para cada usuário ativo dos perfis informados (aviso dentro do sistema)
@@ -286,33 +307,43 @@ public class SemanaListaService : ISemanaListaService
 
     private async Task<SemanaListaDto> MapToDtoAsync(SemanaLista semana, CancellationToken ct)
     {
-        var locaisMap = (await _localRepository.GetAllAsync(ct)).ToDictionary(l => l.Id, l => l.Nome);
+        var locaisMap = (await _localRepository.GetAllAsync(ct)).ToDictionary(l => l.Id, l => l);
         var materiaisMap = (await _materialRepository.GetAllAsync(ct)).ToDictionary(m => m.Id, m => m);
 
-        var listaLocalDtos = semana.ListasLocais.Select(l => new ListaLocalDto(
-            l.Id,
-            l.SemanaListaId,
-            l.LocalId,
-            locaisMap.TryGetValue(l.LocalId, out var nomeLocal) ? nomeLocal : (l.Local?.Nome ?? string.Empty),
-            l.Status.ToString(),
-            l.SeparadoPorAlmoxarifeId,
-            l.DataSeparacao,
-            l.NomeRetiradoPor,
-            l.DataRetirada,
-            l.Itens.Select(i => new ListaLocalItemDto(
-                i.Id,
-                i.ListaLocalId,
-                i.MaterialId,
-                materiaisMap.TryGetValue(i.MaterialId, out var mat) ? mat.Nome : (i.Material?.Nome ?? string.Empty),
-                materiaisMap.TryGetValue(i.MaterialId, out mat) ? mat.Unidade.ToString() : (i.Material?.Unidade.ToString() ?? string.Empty),
-                i.QuantidadeSolicitada,
-                i.QuantidadeSeparada,
-                i.StatusItem.ToString(),
-                i.Observacao
-            )).ToList(),
-            l.AssinaturaDigital,
-            l.VerificarAssinaturaDigital()
-        )).ToList();
+        var listaLocalDtos = semana.ListasLocais
+            .Select(l => new { Lista = l, Local = locaisMap.TryGetValue(l.LocalId, out var loc) ? loc : l.Local })
+            .OrderBy(x => x.Local?.OrdemExibicao ?? int.MaxValue)
+            .ThenBy(x => x.Local?.Nome)
+            .Select(x => new ListaLocalDto(
+                x.Lista.Id,
+                x.Lista.SemanaListaId,
+                x.Lista.LocalId,
+                x.Local?.Nome ?? string.Empty,
+                x.Lista.Status.ToString(),
+                x.Lista.SeparadoPorAlmoxarifeId,
+                x.Lista.DataSeparacao,
+                x.Lista.NomeRetiradoPor,
+                x.Lista.DataRetirada,
+                x.Lista.Itens
+                    .Select(i => new { Item = i, Material = materiaisMap.TryGetValue(i.MaterialId, out var mat) ? mat : i.Material })
+                    .OrderBy(y => y.Material?.OrdemExibicao ?? int.MaxValue)
+                    .Select(y => new ListaLocalItemDto(
+                        y.Item.Id,
+                        y.Item.ListaLocalId,
+                        y.Item.MaterialId,
+                        y.Material?.Nome ?? string.Empty,
+                        y.Material?.Unidade.ToString() ?? string.Empty,
+                        y.Item.QuantidadeSolicitada,
+                        y.Item.QuantidadeSeparada,
+                        y.Item.StatusItem.ToString(),
+                        y.Item.Observacao))
+                    .ToList(),
+                x.Lista.AssinaturaDigital,
+                x.Lista.VerificarAssinaturaDigital(),
+                x.Lista.SemPedido,
+                x.Local?.Tipo.ToString() ?? string.Empty,
+                x.Local?.OrdemExibicao ?? 0))
+            .ToList();
 
         return new SemanaListaDto(
             semana.Id,

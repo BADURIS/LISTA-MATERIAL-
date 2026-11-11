@@ -84,6 +84,28 @@ public class SemanasListaController : ControllerBase
         return Ok(result);
     }
 
+    // Pedido completo de um local (substitui o anterior). Usado pela tela de preenchimento.
+    [HttpPut("{id:guid}/locais/{localId:guid}/itens")]
+    [Authorize(Roles = "Supervisor,Coordenador")]
+    [ProducesResponseType(typeof(SemanaListaDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<ActionResult<SemanaListaDto>> PreencherLocal(Guid id, Guid localId, [FromBody] PreencherLocalRequest request, CancellationToken ct)
+    {
+        var result = await _semanaListaService.PreencherLocalAsync(id, localId, request, ct);
+        return Ok(result);
+    }
+
+    // Marca (ou desmarca) o local como sem pedido nesta semana
+    [HttpPut("{id:guid}/locais/{localId:guid}/sem-pedido")]
+    [Authorize(Roles = "Supervisor,Coordenador")]
+    [ProducesResponseType(typeof(SemanaListaDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<ActionResult<SemanaListaDto>> DefinirSemPedido(Guid id, Guid localId, [FromBody] DefinirSemPedidoRequest request, CancellationToken ct)
+    {
+        var result = await _semanaListaService.DefinirSemPedidoAsync(id, localId, request, ct);
+        return Ok(result);
+    }
+
     [HttpPost("{id:guid}/enviar-separacao")]
     [Authorize(Roles = "Supervisor")]
     [ProducesResponseType(typeof(SemanaListaDto), StatusCodes.Status200OK)]
@@ -126,9 +148,8 @@ public class SemanasListaController : ControllerBase
         return Ok(result);
     }
 
-    // Histórico de semanas, para o Gestor escolher qual planilha consultar ou exportar
+    // Histórico de semanas (todos os perfis consultam)
     [HttpGet("historico")]
-    [Authorize(Roles = "Gestor")]
     [ProducesResponseType(typeof(IReadOnlyList<SemanaResumoDto>), StatusCodes.Status200OK)]
     public async Task<ActionResult<IReadOnlyList<SemanaResumoDto>>> Historico(CancellationToken ct)
     {
@@ -136,9 +157,9 @@ public class SemanasListaController : ControllerBase
         return Ok(result);
     }
 
-    // Visão consolidada da semana (MATERIAL | UNIDADE | SAÍDA), para o Gestor
+    // Visão consolidada da semana (MATERIAL | UNIDADE | SAÍDA)
     [HttpGet("{id:guid}/resumo")]
-    [Authorize(Roles = "Gestor")]
+    [Authorize(Roles = "Gestor,Almoxarife,Supervisor")]
     [ProducesResponseType(typeof(IReadOnlyList<ResumoMaterialDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<IReadOnlyList<ResumoMaterialDto>>> Resumo(Guid id, CancellationToken ct)
@@ -147,14 +168,24 @@ public class SemanasListaController : ControllerBase
         return Ok(result);
     }
 
-    // Exportação da planilha semanal em XLSX, para o Gestor
+    // Exportação da planilha semanal em XLSX
     [HttpGet("{id:guid}/planilha")]
-    [Authorize(Roles = "Gestor")]
+    [Authorize(Roles = "Gestor,Almoxarife,Supervisor")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> ExportarPlanilha(Guid id, CancellationToken ct)
     {
         var (conteudo, nomeArquivo) = await _planilhaSemanaService.GerarXlsxAsync(id, ct);
+        return File(conteudo, XlsxContentType, nomeArquivo);
+    }
+
+    // Exportação da lista de um local em XLSX (todos os perfis)
+    [HttpGet("{id:guid}/listas/{listaLocalId:guid}/planilha")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> ExportarPlanilhaLocal(Guid id, Guid listaLocalId, CancellationToken ct)
+    {
+        var (conteudo, nomeArquivo) = await _planilhaSemanaService.GerarXlsxLocalAsync(id, listaLocalId, ct);
         return File(conteudo, XlsxContentType, nomeArquivo);
     }
 }

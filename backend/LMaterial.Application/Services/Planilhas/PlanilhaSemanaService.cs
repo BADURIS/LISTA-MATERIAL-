@@ -81,4 +81,49 @@ public class PlanilhaSemanaService : IPlanilhaSemanaService
         var nomeArquivo = $"semana-lista-{semana.DataInicio:yyyy-MM-dd}-a-{semana.DataFim:yyyy-MM-dd}.xlsx";
         return (stream.ToArray(), nomeArquivo);
     }
+
+    // Lista de um local: pedido, quantidade separada, falta e dados da retirada
+    public async Task<(byte[] Conteudo, string NomeArquivo)> GerarXlsxLocalAsync(Guid semanaId, Guid listaLocalId, CancellationToken ct = default)
+    {
+        var semana = await _semanaListaRepository.GetByIdAsync(semanaId, ct)
+            ?? throw new DomainException("Semana de lista não encontrada.");
+
+        var lista = semana.ListasLocais.FirstOrDefault(l => l.Id == listaLocalId)
+            ?? throw new DomainException("Lista local não encontrada nesta semana.");
+
+        var materiais = (await _materialRepository.GetAllAsync(ct)).ToDictionary(m => m.Id);
+        var nomeLocal = lista.Local?.Nome ?? "Local";
+
+        using var workbook = new XLWorkbook();
+        var planilha = workbook.Worksheets.Add("Lista");
+
+        planilha.Cell(1, 1).Value = $"{nomeLocal} - semana {semana.DataInicio:dd/MM/yyyy} a {semana.DataFim:dd/MM/yyyy}";
+        planilha.Cell(1, 1).Style.Font.Bold = true;
+        planilha.Cell(2, 1).Value = lista.SemPedido
+            ? "Sem pedido nesta semana"
+            : lista.DataRetirada.HasValue
+                ? $"Retirado por {lista.NomeRetiradoPor} em {lista.DataRetirada.Value.ToLocalTime():dd/MM/yyyy HH:mm}"
+                : $"Situação: {lista.Status}";
+
+        var linhas = lista.Itens
+            .Select(i => new { Item = i, Material = materiais.TryGetValue(i.MaterialId, out var m) ? m : null })
+            .OrderBy(x => x.Material?.OrdemExibicao ?? int.MaxValue)
+            .Select(x => new object[]
+            {
+                x.Material?.Nome ?? "Material removido",
+                x.Material?.Unidade.ToString() ?? "",
+                x.Item.QuantidadeSolicitada,
+                x.Item.QuantidadeSeparada.HasValue ? x.Item.QuantidadeSeparada.Value : "",
+                x.Item.QuantidadeSeparada.HasValue ? Math.Max(0, x.Item.QuantidadeSolicitada - x.Item.QuantidadeSeparada.Value) : "",
+                x.Item.Observacao ?? ""
+            });
+
+        PlanilhaHelper.EscreverTabela(planilha, 4, new[] { "MATERIAL", "UNIDADE", "SOLICITADO", "SEPARADO", "FALTA", "OBSERVAÇÃO" }, linhas);
+
+        using var stream = new MemoryStream();
+        workbook.SaveAs(stream);
+
+        var nomeArquivoLocal = new string(nomeLocal.Select(c => char.IsLetterOrDigit(c) ? char.ToLowerInvariant(c) : '-').ToArray());
+        return (stream.ToArray(), $"lista-{nomeArquivoLocal}-{semana.DataInicio:yyyy-MM-dd}.xlsx");
+    }
 }

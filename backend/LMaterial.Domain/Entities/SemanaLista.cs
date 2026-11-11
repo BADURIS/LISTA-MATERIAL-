@@ -93,6 +93,24 @@ public class SemanaLista
         _listasLocais.Add(novaListaLocal);
     }
 
+    // Preenchimento do pedido de um local enquanto a semana está em montagem
+    public ListaLocal PreencherLocal(Guid localId, IEnumerable<(Guid MaterialId, int Quantidade)> itens)
+    {
+        var lista = ObterListaParaMontagem(localId);
+        lista.DefinirItens(itens);
+        return lista;
+    }
+
+    public ListaLocal DefinirSemPedido(Guid localId, bool semPedido)
+    {
+        var lista = ObterListaParaMontagem(localId);
+        lista.DefinirSemPedido(semPedido);
+        return lista;
+    }
+
+    // Listas que entram na separação (locais marcados como sem pedido ficam de fora)
+    public IEnumerable<ListaLocal> ObterListasComPedido() => _listasLocais.Where(l => !l.SemPedido);
+
     public void EnviarParaSeparacao()
     {
         if (Status != StatusSemanaLista.EmMontagem)
@@ -100,6 +118,19 @@ public class SemanaLista
 
         if (!_listasLocais.Any())
             throw new DomainException("Não é possível enviar para separação uma semana de lista sem nenhum local associado.");
+
+        // Trava: todos os locais precisam ter pedido realizado ou estar marcados como sem pedido
+        var pendentes = _listasLocais.Where(l => !l.EstaPreenchida).ToList();
+        if (pendentes.Count > 0)
+        {
+            var nomes = string.Join(", ", pendentes.Select(l => l.Local?.Nome).Where(n => !string.IsNullOrWhiteSpace(n)));
+            throw new DomainException(
+                $"Não é possível enviar para separação: {pendentes.Count} local(is) ainda sem pedido realizado" +
+                (nomes.Length > 0 ? $" ({nomes})." : "."));
+        }
+
+        if (!ObterListasComPedido().Any())
+            throw new DomainException("Não é possível enviar para separação: nenhum local tem pedido nesta semana.");
 
         Status = StatusSemanaLista.EnviadaParaSeparacao;
     }
@@ -109,10 +140,19 @@ public class SemanaLista
         if (Status != StatusSemanaLista.EnviadaParaSeparacao)
             throw new DomainException("Apenas semanas de lista Enviadas Para Separação podem ter a separação concluída.");
 
-        if (_listasLocais.Any(l => l.Status == StatusListaLocal.Pendente))
+        if (ObterListasComPedido().Any(l => l.Status == StatusListaLocal.Pendente))
             throw new DomainException("Não é possível concluir a separação enquanto houver listas locais pendentes.");
 
         Status = StatusSemanaLista.SeparacaoConcluida;
+    }
+
+    private ListaLocal ObterListaParaMontagem(Guid localId)
+    {
+        if (Status != StatusSemanaLista.EmMontagem)
+            throw new DomainException("A semana já foi enviada ao almoxarifado: os pedidos não podem mais ser alterados.");
+
+        return _listasLocais.FirstOrDefault(l => l.LocalId == localId)
+            ?? throw new DomainException("Este local não faz parte da semana.");
     }
 
     public void Finalizar()
@@ -121,7 +161,7 @@ public class SemanaLista
             throw new DomainException("Apenas semanas de lista que foram Enviadas Para Separação podem ser finalizadas.");
 
         // Regra de negócio: todas as listas de locais associadas devem estar em um estado final (ex: Retirado, Confirmado ou ConfirmadoComPendencia)
-        if (_listasLocais.Any(l => l.Status != StatusListaLocal.Retirado && 
+        if (ObterListasComPedido().Any(l => l.Status != StatusListaLocal.Retirado &&
                                    l.Status != StatusListaLocal.Confirmado && 
                                    l.Status != StatusListaLocal.ConfirmadoComPendencia))
         {

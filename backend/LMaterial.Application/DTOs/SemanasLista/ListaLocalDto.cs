@@ -15,5 +15,8 @@ public record ListaLocalDto(
     DateTime? DataRetirada,
     List<ListaLocalItemDto> Itens,
     string? AssinaturaDigital = null,
-    bool AssinaturaValida = false
+    bool AssinaturaValida = false,
+    bool SemPedido = false,
+    string TipoLocal = "",
+    int OrdemExibicao = 0
 );

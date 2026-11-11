@@ -87,6 +87,7 @@ public class FluxoAssinaturaTests
     {
         var semana = SemanaLista.Create(new DateOnly(2026, 10, 12), new DateOnly(2026, 10, 16), Guid.NewGuid());
         semana.AdicionarListaLocal(Guid.NewGuid());
+        semana.ListasLocais.Single().AdicionarItem(Guid.NewGuid(), 2);
         semana.EnviarParaSeparacao();
 
         Assert.Throws<DomainException>(() => semana.MarcarSeparacaoConcluida());
@@ -97,10 +98,10 @@ public class FluxoAssinaturaTests
     {
         var semana = SemanaLista.Create(new DateOnly(2026, 10, 12), new DateOnly(2026, 10, 16), Guid.NewGuid());
         semana.AdicionarListaLocal(Guid.NewGuid());
-        semana.EnviarParaSeparacao();
-
         var lista = semana.ListasLocais.Single();
         lista.AdicionarItem(Guid.NewGuid(), 2);
+        semana.EnviarParaSeparacao();
+
         lista.RegistrarSeparacao(Guid.NewGuid(), DateTime.UtcNow);
 
         semana.MarcarSeparacaoConcluida();
@@ -113,10 +114,10 @@ public class FluxoAssinaturaTests
     {
         var semana = SemanaLista.Create(new DateOnly(2026, 10, 12), new DateOnly(2026, 10, 16), Guid.NewGuid());
         semana.AdicionarListaLocal(Guid.NewGuid());
-        semana.EnviarParaSeparacao();
-
         var lista = semana.ListasLocais.Single();
         lista.AdicionarItem(Guid.NewGuid(), 2);
+        semana.EnviarParaSeparacao();
+
         lista.RegistrarSeparacao(Guid.NewGuid(), DateTime.UtcNow);
         semana.MarcarSeparacaoConcluida();
 

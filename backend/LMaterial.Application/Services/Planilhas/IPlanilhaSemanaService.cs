@@ -10,4 +10,5 @@ public interface IPlanilhaSemanaService
 {
     Task<IReadOnlyList<ResumoMaterialDto>> GerarResumoAsync(Guid semanaId, CancellationToken ct = default);
     Task<(byte[] Conteudo, string NomeArquivo)> GerarXlsxAsync(Guid semanaId, CancellationToken ct = default);
+    Task<(byte[] Conteudo, string NomeArquivo)> GerarXlsxLocalAsync(Guid semanaId, Guid listaLocalId, CancellationToken ct = default);
 }

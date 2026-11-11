@@ -47,6 +47,11 @@ namespace LMaterial.Infrastructure.Migrations
                     b.Property<Guid?>("RegistradoPorUsuarioId")
                         .HasColumnType("uuid");
 
+                    b.Property<bool>("SemPedido")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
                     b.Property<Guid>("SemanaListaId")
                         .HasColumnType("uuid");
 

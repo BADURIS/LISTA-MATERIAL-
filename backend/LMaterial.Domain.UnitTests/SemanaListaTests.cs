@@ -1,3 +1,4 @@
+using System.Linq;
 using System;
 using LMaterial.Domain.Entities;
 using LMaterial.Domain.Enums;
@@ -83,6 +84,7 @@ public class SemanaListaTests
         // Arrange
         var semana = SemanaLista.Create(DateOnly.FromDateTime(DateTime.UtcNow), DateOnly.FromDateTime(DateTime.UtcNow).AddDays(7), Guid.NewGuid());
         semana.AdicionarListaLocal(Guid.NewGuid());
+        semana.ListasLocais.Last().AdicionarItem(Guid.NewGuid(), 1);
         semana.EnviarParaSeparacao();
 
         // Act & Assert
@@ -111,6 +113,7 @@ public class SemanaListaTests
         // Arrange
         var semana = SemanaLista.Create(DateOnly.FromDateTime(DateTime.UtcNow), DateOnly.FromDateTime(DateTime.UtcNow).AddDays(7), Guid.NewGuid());
         semana.AdicionarListaLocal(Guid.NewGuid());
+        semana.ListasLocais.Last().AdicionarItem(Guid.NewGuid(), 1);
 
         // Act
         semana.EnviarParaSeparacao();
@@ -125,6 +128,7 @@ public class SemanaListaTests
         // Arrange
         var semana = SemanaLista.Create(DateOnly.FromDateTime(DateTime.UtcNow), DateOnly.FromDateTime(DateTime.UtcNow).AddDays(7), Guid.NewGuid());
         semana.AdicionarListaLocal(Guid.NewGuid());
+        semana.ListasLocais.Last().AdicionarItem(Guid.NewGuid(), 1);
         semana.EnviarParaSeparacao();
 
         // Act & Assert
