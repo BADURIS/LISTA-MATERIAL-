@@ -84,10 +84,34 @@ public class MaterialService : IMaterialService
         material.AlterarUnidade(unidade);
         material.AlterarOrdemExibicao(request.OrdemExibicao);
 
+        if (request.Ativo)
+            material.Ativar();
+        else
+            material.Inativar();
+
         await _materialRepository.UpdateAsync(material, ct);
         await _unitOfWork.SaveChangesAsync(ct);
 
         return MapToDto(material);
+    }
+
+    // Material nunca usado em pedido é apagado; o que já está no histórico é só inativado
+    public async Task<ExcluirMaterialResultado?> DeleteAsync(Guid id, CancellationToken ct = default)
+    {
+        var material = await _materialRepository.GetByIdAsync(id, ct);
+        if (material == null) return null;
+
+        if (await _materialRepository.EstaEmUsoAsync(id, ct))
+        {
+            material.Inativar();
+            await _materialRepository.UpdateAsync(material, ct);
+            await _unitOfWork.SaveChangesAsync(ct);
+            return new ExcluirMaterialResultado(Excluido: false, Inativado: true, MapToDto(material));
+        }
+
+        _materialRepository.Remover(material);
+        await _unitOfWork.SaveChangesAsync(ct);
+        return new ExcluirMaterialResultado(Excluido: true, Inativado: false, null);
     }
 
     private static MaterialDto MapToDto(Material material)

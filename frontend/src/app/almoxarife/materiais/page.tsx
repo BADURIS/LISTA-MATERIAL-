@@ -4,7 +4,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { fetchApi, listarTodos } from '@/lib/api';
 import type { Material } from '@/lib/tipos';
 import { Aviso, Cabecalho, Carregando, Mensagem, Protegido } from '@/components/ui';
-import { Plus, Edit2, Check, X, Power, PowerOff, Boxes, Search } from 'lucide-react';
+import { Plus, Edit2, Check, X, Power, PowerOff, Boxes, Search, Trash2 } from 'lucide-react';
 
 const UNIDADES = ['UN', 'CX', 'PCT'];
 
@@ -42,6 +42,24 @@ function GerenciarMateriais() {
       setMensagem({ tipo: 'sucesso', texto: sucesso });
     } catch (err: any) {
       setMensagem({ tipo: 'erro', texto: err.message || 'Erro ao atualizar o material.' });
+    }
+  };
+
+  // Material nunca pedido é apagado; o que já está em alguma lista é só inativado (o histórico continua)
+  const excluir = async (m: Material) => {
+    if (!window.confirm(`Excluir o material "${m.nome}"?\n\nSe ele já foi usado em algum pedido, será apenas inativado para manter o histórico.`)) return;
+    setMensagem(null);
+    try {
+      const r = await fetchApi<{ excluido: boolean; inativado: boolean; material: Material | null }>(`/api/materiais/${m.id}`, { method: 'DELETE' });
+      if (r.excluido) {
+        setMateriais((prev) => prev.filter((x) => x.id !== m.id));
+        setMensagem({ tipo: 'sucesso', texto: `Material "${m.nome}" excluído.` });
+      } else {
+        if (r.material) setMateriais((prev) => prev.map((x) => (x.id === m.id ? r.material! : x)));
+        setMensagem({ tipo: 'sucesso', texto: `"${m.nome}" já aparece em pedidos anteriores, então foi inativado (não aparece mais nos novos pedidos).` });
+      }
+    } catch (err: any) {
+      setMensagem({ tipo: 'erro', texto: err.message || 'Erro ao excluir o material.' });
     }
   };
 
@@ -170,7 +188,15 @@ function GerenciarMateriais() {
                           {m.ativo ? 'Ativo' : 'Inativo'}
                         </span>
                       </td>
-                      <td className="px-4 sm:px-6 py-3 text-right">
+                      <td className="px-4 sm:px-6 py-3 text-right whitespace-nowrap space-x-2">
+                        <button
+                          onClick={() => excluir(m)}
+                          className="px-3 py-1.5 rounded-lg font-semibold text-xs transition inline-flex items-center gap-1 bg-slate-100 text-slate-700 hover:bg-rose-100 hover:text-rose-800"
+                          aria-label={`Excluir ${m.nome}`}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          Excluir
+                        </button>
                         <button
                           onClick={() => atualizar(m, { ativo: !m.ativo }, m.ativo ? `"${m.nome}" inativado.` : `"${m.nome}" reativado.`)}
                           className={`px-3 py-1.5 rounded-lg font-semibold text-xs transition inline-flex items-center gap-1 ${
@@ -234,9 +260,9 @@ function GerenciarMateriais() {
   );
 }
 
-export default function SupervisorMateriaisPage() {
+export default function AlmoxarifeMateriaisPage() {
   return (
-    <Protegido perfis={['Supervisor']}>
+    <Protegido perfis={['Almoxarife']}>
       <GerenciarMateriais />
     </Protegido>
   );

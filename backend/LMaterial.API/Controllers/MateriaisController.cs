@@ -52,7 +52,7 @@ public class MateriaisController : ControllerBase
     }
 
     [HttpPost]
-    [Authorize(Roles = "Supervisor")]
+    [Authorize(Roles = "Almoxarife")]
     [ProducesResponseType(typeof(MaterialDto), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<MaterialDto>> Create([FromBody] CreateMaterialRequest request, CancellationToken ct)
@@ -62,13 +62,27 @@ public class MateriaisController : ControllerBase
     }
 
     [HttpPut("{id:guid}")]
-    [Authorize(Roles = "Supervisor")]
+    [Authorize(Roles = "Almoxarife")]
     [ProducesResponseType(typeof(MaterialDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<MaterialDto>> Update(Guid id, [FromBody] UpdateMaterialRequest request, CancellationToken ct)
     {
         var result = await _materialService.UpdateAsync(id, request, ct);
+        if (result == null)
+            return NotFound();
+
+        return Ok(result);
+    }
+
+    // Apaga o material; se ele já foi usado em algum pedido, apenas o inativa para preservar o histórico
+    [HttpDelete("{id:guid}")]
+    [Authorize(Roles = "Almoxarife")]
+    [ProducesResponseType(typeof(ExcluirMaterialResultado), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<ExcluirMaterialResultado>> Delete(Guid id, CancellationToken ct)
+    {
+        var result = await _materialService.DeleteAsync(id, ct);
         if (result == null)
             return NotFound();
 

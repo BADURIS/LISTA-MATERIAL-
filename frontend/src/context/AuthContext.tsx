@@ -9,7 +9,7 @@ export type { Perfil, Usuario };
 // Página inicial de cada perfil
 export const PAGINA_INICIAL: Record<Perfil, string> = {
   Supervisor: '/supervisor/nova-semana',
-  Coordenador: '/coordenador/retirada',
+  Coordenador: '/coordenador/pedidos',
   Almoxarife: '/almoxarife/semana-atual',
   Gestor: '/gestor/consumo',
 };

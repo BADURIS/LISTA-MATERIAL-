@@ -137,7 +137,7 @@ public class RelatorioPdfService : IRelatorioPdfService
                 ? (await _usuarioRepository.GetByIdAsync(lista.RegistradoPorUsuarioId.Value, ct))?.NomeCompleto
                 : null;
 
-            pdf.Campo("Retirado por", lista.NomeRetiradoPor ?? "");
+            pdf.Campo("Responsável pela retirada", lista.NomeRetiradoPor ?? "");
             pdf.Campo("Data e hora", $"{HorarioBrasilia.Formatar(lista.DataRetirada.Value)} (horário de Brasília)");
             if (registradoPor != null)
                 pdf.Campo("Registrado no sistema por", registradoPor);
@@ -154,11 +154,11 @@ public class RelatorioPdfService : IRelatorioPdfService
         else
         {
             pdf.Texto("Retirada ainda não registrada no sistema. Use os campos abaixo para o registro em papel.");
-            pdf.Campo("Retirado por", "______________________________________________");
+            pdf.Campo("Responsável pela retirada", "______________________________________________");
             pdf.Campo("Data e hora", "____/____/________   ____:____");
         }
 
-        pdf.LinhasAssinatura("Assinatura de quem retirou", "Assinatura do responsável (Coordenador)");
+        pdf.LinhasAssinatura("Assinatura do responsável pela retirada", "Assinatura do almoxarife");
 
         return (pdf.Gerar(), NomeArquivo("lista", nomeLocal, semana));
     }
@@ -218,7 +218,7 @@ public class RelatorioPdfService : IRelatorioPdfService
                 new ColunaPdf("Situação", 3.3),
                 new ColunaPdf("Itens", 1.3, ParagraphAlignment.Right),
                 new ColunaPdf("Separado", 1.8, ParagraphAlignment.Right),
-                new ColunaPdf("Retirado por", 5),
+                new ColunaPdf("Responsável retirada", 5),
                 new ColunaPdf("Data", 3.2),
             },
             linhas,

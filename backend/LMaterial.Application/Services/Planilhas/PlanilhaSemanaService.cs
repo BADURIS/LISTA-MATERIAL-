@@ -75,6 +75,19 @@ public class PlanilhaSemanaService : IPlanilhaSemanaService
         planilha.SheetView.FreezeRows(1);
         planilha.Columns().AdjustToContents();
 
+        // Segunda aba: quem retirou o material de cada local, com data e hora (horário de Brasília)
+        var abaRetiradas = workbook.Worksheets.Add("Retiradas");
+        var linhasRetirada = semana.ListasLocais
+            .OrderBy(l => l.Local?.OrdemExibicao ?? int.MaxValue)
+            .Select(l => new object[]
+            {
+                l.Local?.Nome ?? "Local",
+                l.SemPedido ? "Sem pedido" : l.NomeRetiradoPor ?? "Não retirado",
+                l.DataRetirada.HasValue ? LMaterial.Application.Services.Relatorios.HorarioBrasilia.Formatar(l.DataRetirada.Value) : "",
+                l.SemPedido ? "" : l.Itens.Sum(i => i.QuantidadeSeparada ?? 0)
+            });
+        PlanilhaHelper.EscreverTabela(abaRetiradas, 1, new[] { "LOCAL", "RESPONSÁVEL PELA RETIRADA", "DATA/HORA", "QTD. ENTREGUE" }, linhasRetirada);
+
         using var stream = new MemoryStream();
         workbook.SaveAs(stream);
 
@@ -102,7 +115,7 @@ public class PlanilhaSemanaService : IPlanilhaSemanaService
         planilha.Cell(2, 1).Value = lista.SemPedido
             ? "Sem pedido nesta semana"
             : lista.DataRetirada.HasValue
-                ? $"Retirado por {lista.NomeRetiradoPor} em {LMaterial.Application.Services.Relatorios.HorarioBrasilia.Formatar(lista.DataRetirada.Value)}"
+                ? $"Responsável pela retirada: {lista.NomeRetiradoPor} em {LMaterial.Application.Services.Relatorios.HorarioBrasilia.Formatar(lista.DataRetirada.Value)}"
                 : $"Situação: {lista.Status}";
 
         var linhas = lista.Itens

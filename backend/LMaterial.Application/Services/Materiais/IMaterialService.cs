@@ -16,4 +16,5 @@ public interface IMaterialService
     Task<PagedResult<MaterialDto>> GetAtivosPagedAsync(PaginationParams pagination, CancellationToken ct = default);
     Task<MaterialDto> CreateAsync(CreateMaterialRequest request, CancellationToken ct = default);
     Task<MaterialDto?> UpdateAsync(Guid id, UpdateMaterialRequest request, CancellationToken ct = default);
+    Task<ExcluirMaterialResultado?> DeleteAsync(Guid id, CancellationToken ct = default);
 }

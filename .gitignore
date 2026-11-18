@@ -17,3 +17,4 @@ appsettings.*.local.json
 
 # Logs dos servidores locais
 .logs/
+ACESSOS.local.md

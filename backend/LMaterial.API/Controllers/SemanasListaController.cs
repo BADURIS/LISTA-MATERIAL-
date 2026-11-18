@@ -134,7 +134,7 @@ public class SemanasListaController : ControllerBase
     }
 
     [HttpPost("{id:guid}/confirmar-recebimento")]
-    [Authorize(Roles = "Coordenador")]
+    [Authorize(Roles = "Almoxarife")]
     [ProducesResponseType(typeof(SemanaListaDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<SemanaListaDto>> ConfirmarRecebimento(Guid id, [FromBody] ConfirmarRecebimentoRequest? request, CancellationToken ct)
@@ -144,9 +144,10 @@ public class SemanasListaController : ControllerBase
         return Ok(result);
     }
 
-    // Retirada registrada pelo Coordenador; o nome informado e a data/hora formam a assinatura digital da lista
+    // Retirada registrada pelo Almoxarife no balcão: o nome do responsável que retirou e a data/hora
+    // formam a assinatura digital da lista
     [HttpPost("{id:guid}/registrar-retirada")]
-    [Authorize(Roles = "Coordenador")]
+    [Authorize(Roles = "Almoxarife")]
     [ProducesResponseType(typeof(SemanaListaDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<SemanaListaDto>> RegistrarRetirada(Guid id, [FromBody] RegistrarRetiradaRequest request, CancellationToken ct)

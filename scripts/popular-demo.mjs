@@ -1,16 +1,19 @@
 // Percorre o fluxo completo pela API e deixa semanas finalizadas no banco, para testar telas e gráficos de consumo.
 // Também serve como teste de ponta a ponta: para no primeiro erro.
 //
-// Uso (com a API rodando):  node scripts/popular-demo.mjs [semanas] [senha]
+// Uso (com a API rodando):  node scripts/popular-demo.mjs [semanas]
+//   Senhas: SENHA_SUPERVISOR, SENHA_ALMOXARIFE (uma por usuário) ou SENHA_DEMO (igual para todos)
 //   API_URL=http://localhost:5175 (padrão)
 
 const API = process.env.API_URL || 'http://localhost:5175';
 const SEMANAS = Number(process.argv[2] || 3);
-const SENHA = process.argv[3] || process.env.SENHA_DEMO;
+const senhaDe = (usuario) => process.env[`SENHA_${usuario.toUpperCase()}`] || process.argv[3] || process.env.SENHA_DEMO;
 
-if (!SENHA) {
-  console.error('Informe a senha dos usuários de teste: node scripts/popular-demo.mjs 3 <senha>');
-  process.exit(1);
+for (const u of ['supervisor', 'almoxarife']) {
+  if (!senhaDe(u)) {
+    console.error(`Informe a senha de ${u}: SENHA_${u.toUpperCase()}=<senha> node scripts/popular-demo.mjs 3`);
+    process.exit(1);
+  }
 }
 
 // Sequência pseudo-aleatória fixa: o resultado é sempre o mesmo
@@ -30,7 +33,7 @@ async function chamar(token, metodo, caminho, corpo) {
 }
 
 async function login(usuario) {
-  const r = await chamar(null, 'POST', '/api/auth/login', { username: usuario, password: SENHA });
+  const r = await chamar(null, 'POST', '/api/auth/login', { username: usuario, password: senhaDe(usuario) });
   return r.accessToken;
 }
 
@@ -44,7 +47,6 @@ function segundaDaSemana(offsetSemanas) {
 
 const supervisor = await login('supervisor');
 const almoxarife = await login('almoxarife');
-const coordenador = await login('coordenador');
 
 const atual = await fetch(`${API}/api/semanas-lista/atual`, { headers: { Authorization: `Bearer ${supervisor}` } });
 if (atual.status === 200) {
@@ -83,10 +85,9 @@ for (let s = SEMANAS; s >= 1; s--) {
   );
   semana = await chamar(almoxarife, 'POST', `/api/semanas-lista/${semana.id}/registrar-separacao`, { itens: itensSeparados });
 
-  // Recebimento e retirada em cada local com pedido
+  // Retirada no almoxarifado: o almoxarife registra o responsável de cada local com pedido
   for (const lista of semana.locais.filter((l) => !l.semPedido)) {
-    await chamar(coordenador, 'POST', `/api/semanas-lista/${semana.id}/confirmar-recebimento`, { listaLocalId: lista.id });
-    semana = await chamar(coordenador, 'POST', `/api/semanas-lista/${semana.id}/registrar-retirada`, {
+    semana = await chamar(almoxarife, 'POST', `/api/semanas-lista/${semana.id}/registrar-retirada`, {
       listaLocalId: lista.id,
       nomeRetiradoPor: `Colaboradora ${lista.nomeLocal}`,
     });

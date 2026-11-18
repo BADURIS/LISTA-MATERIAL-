@@ -18,7 +18,6 @@ import {
   Menu,
   X,
   Boxes,
-  UserCheck,
   Bell,
   ClipboardList,
 } from 'lucide-react';
@@ -33,17 +32,16 @@ const NAV_POR_PERFIL: Record<Perfil, NavItem[]> = {
   Supervisor: [
     { href: '/supervisor/nova-semana', label: 'Semana', icon: <Package className="w-4 h-4" /> },
     { href: '/supervisor/locais', label: 'Locais', icon: <Settings className="w-4 h-4" /> },
-    { href: '/supervisor/materiais', label: 'Materiais', icon: <Boxes className="w-4 h-4" /> },
     { href: '/gestor/consumo', label: 'Consumo', icon: <BarChart3 className="w-4 h-4" /> },
     { href: '/historico', label: 'Histórico', icon: <History className="w-4 h-4" /> },
   ],
   Coordenador: [
-    { href: '/coordenador/retirada', label: 'Recebimento e Retirada', icon: <UserCheck className="w-4 h-4" /> },
     { href: '/coordenador/pedidos', label: 'Pedidos', icon: <ClipboardList className="w-4 h-4" /> },
     { href: '/historico', label: 'Histórico', icon: <History className="w-4 h-4" /> },
   ],
   Almoxarife: [
-    { href: '/almoxarife/semana-atual', label: 'Separação', icon: <ClipboardCheck className="w-4 h-4" /> },
+    { href: '/almoxarife/semana-atual', label: 'Separação e Retirada', icon: <ClipboardCheck className="w-4 h-4" /> },
+    { href: '/almoxarife/materiais', label: 'Materiais', icon: <Boxes className="w-4 h-4" /> },
     { href: '/levantamento', label: 'Levantamento', icon: <BarChart3 className="w-4 h-4" /> },
     { href: '/historico', label: 'Histórico', icon: <History className="w-4 h-4" /> },
   ],

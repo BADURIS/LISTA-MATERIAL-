@@ -16,19 +16,17 @@ import {
   ChevronUp,
   Save,
   X,
-  PackageCheck,
   ShieldCheck,
   ShieldAlert,
 } from 'lucide-react';
 
-export type ModoSemana = 'almoxarife' | 'coordenador' | 'consulta';
+export type ModoSemana = 'almoxarife' | 'consulta';
 
 // Quantidade separada fica como texto para permitir o campo vazio (item ainda não conferido)
 type ItemForm = { qtd: string; obs: string };
 
 const TITULOS: Record<ModoSemana, string> = {
-  almoxarife: 'Separação de Materiais',
-  coordenador: 'Recebimento e Retirada',
+  almoxarife: 'Separação e Retirada',
   consulta: 'Lista da Semana (consulta)',
 };
 
@@ -76,7 +74,16 @@ export default function SemanaEmAndamento({ modo }: { modo: ModoSemana }) {
 
   const montarForm = (l: ListaLocal) => {
     const mapa: Record<string, ItemForm> = {};
-    l.itens.forEach((i) => (mapa[i.id] = { qtd: i.quantidadeSeparada === null ? '' : String(i.quantidadeSeparada), obs: i.observacao || '' }));
+    // Na separação, o item ainda não conferido já vem com a quantidade pedida:
+    // o almoxarife só altera quando entregar menos do que foi pedido
+    const preencherPedido = modo === 'almoxarife' && l.status === 'Pendente' && !l.semPedido;
+    l.itens.forEach(
+      (i) =>
+        (mapa[i.id] = {
+          qtd: i.quantidadeSeparada !== null ? String(i.quantidadeSeparada) : preencherPedido ? String(i.quantidadeSolicitada) : '',
+          obs: i.observacao || '',
+        })
+    );
     setForm(mapa);
   };
 
@@ -104,17 +111,6 @@ export default function SemanaEmAndamento({ modo }: { modo: ModoSemana }) {
     let novo = valor.replace(/\D/g, '');
     if (novo !== '' && Number(novo) > item.quantidadeSolicitada) novo = String(item.quantidadeSolicitada);
     setForm((prev) => ({ ...prev, [item.id]: { ...prev[item.id], qtd: novo } }));
-  };
-
-  const separarTudo = () => {
-    if (!local) return;
-    setForm((prev) => {
-      const novo = { ...prev };
-      local.itens.forEach((i) => {
-        if (!novo[i.id] || novo[i.id].qtd === '') novo[i.id] = { ...novo[i.id], qtd: String(i.quantidadeSolicitada) };
-      });
-      return novo;
-    });
   };
 
   const salvarSeparacao = async () => {
@@ -149,8 +145,8 @@ export default function SemanaEmAndamento({ modo }: { modo: ModoSemana }) {
         tipo: 'sucesso',
         texto: conclui
           ? nova.status === 'SeparacaoConcluida'
-            ? 'Separação do local concluída. Todos os locais foram separados: supervisor e coordenador foram avisados.'
-            : `Separação de ${local.nomeLocal} concluída.`
+            ? 'Separação concluída. Todos os locais foram separados: supervisor e coordenador foram avisados. Registre a retirada na entrega.'
+            : `Separação de ${local.nomeLocal} concluída. Registre a retirada na entrega.`
           : `${preenchidos.length} de ${local.itens.length} itens salvos. Continue quando quiser.`,
       });
     } catch (err: any) {
@@ -161,30 +157,9 @@ export default function SemanaEmAndamento({ modo }: { modo: ModoSemana }) {
   };
 
   // ----- Coordenador -----
-  const podeConfirmar = modo === 'coordenador' && local?.status === 'Separado';
-  const podeRetirar = modo === 'coordenador' && (local?.status === 'Confirmado' || local?.status === 'ConfirmadoComPendencia');
-
-  const confirmarRecebimento = async () => {
-    if (!semana || !local) return;
-    setOcupado(true);
-    setMensagem(null);
-    try {
-      const nova = await fetchApi<Semana>(`/api/semanas-lista/${semana.id}/confirmar-recebimento`, {
-        method: 'POST',
-        body: JSON.stringify({ listaLocalId: local.id }),
-      });
-      atualizarSemana(nova, local.id);
-      const status = nova.locais.find((l) => l.id === local.id)?.status;
-      setMensagem({
-        tipo: 'sucesso',
-        texto: status === 'ConfirmadoComPendencia' ? 'Recebimento confirmado com pendência (há itens em falta).' : 'Recebimento confirmado. Agora registre a retirada.',
-      });
-    } catch (err: any) {
-      setMensagem({ tipo: 'erro', texto: err.message || 'Erro ao confirmar o recebimento.' });
-    } finally {
-      setOcupado(false);
-    }
-  };
+  // Retirada no balcão: depois de separado, o almoxarife entrega e registra o responsável que retirou
+  const podeRetirar =
+    modo === 'almoxarife' && (local?.status === 'Separado' || local?.status === 'Confirmado' || local?.status === 'ConfirmadoComPendencia');
 
   const abrirModalRetirada = () => {
     if (nomeRetirada.trim().length < 3) {
@@ -266,9 +241,7 @@ export default function SemanaEmAndamento({ modo }: { modo: ModoSemana }) {
           <div>
             <p className="font-bold text-sm">Lista ainda em montagem</p>
             <p className="text-sm mt-1">
-              {modo === 'almoxarife'
-                ? 'A separação é liberada quando o supervisor enviar a semana ao almoxarifado.'
-                : 'O recebimento e a retirada são liberados depois da separação. Para ajudar nos pedidos, use o menu "Pedidos".'}{' '}
+              A separação é liberada quando o supervisor enviar a semana ao almoxarifado.{' '}
               Locais prontos: <span className="font-bold">{semana.locais.filter((l) => l.semPedido || l.itens.length > 0).length} de {semana.locais.length}</span>.
             </p>
           </div>
@@ -277,8 +250,8 @@ export default function SemanaEmAndamento({ modo }: { modo: ModoSemana }) {
 
       {semana && !bloquearGrade && (
         <>
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-center">
-            {(['Pendente', 'Separado', 'ConfirmadoComPendencia', 'Confirmado', 'Retirado'] as StatusLista[]).map((s) => (
+          <div className="grid grid-cols-3 gap-2 text-center">
+            {(['Pendente', 'Separado', 'Retirado'] as StatusLista[]).map((s) => (
               <div key={s} className={`rounded-xl border px-3 py-2 ${ESTILO_STATUS[s]}`}>
                 <p className="text-xl font-extrabold">{contagem(s)}</p>
                 <p className="text-[11px] font-bold uppercase tracking-wide">{STATUS_LISTA[s]}</p>
@@ -377,16 +350,9 @@ export default function SemanaEmAndamento({ modo }: { modo: ModoSemana }) {
 
               {podeSeparar && (
                 <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 flex flex-col sm:flex-row sm:items-center gap-3">
-                  <button
-                    onClick={separarTudo}
-                    disabled={ocupado}
-                    className="px-4 py-2.5 bg-white border border-slate-300 text-slate-800 hover:bg-slate-100 rounded-xl text-sm font-semibold transition"
-                    title="Preenche a quantidade pedida nos itens ainda vazios"
-                  >
-                    Separar tudo o pedido
-                  </button>
                   <p className="text-xs text-slate-500 sm:flex-1">
-                    Você pode salvar aos poucos. Quando todos os itens tiverem quantidade, a separação do local é concluída.
+                    As quantidades já vêm iguais ao pedido. Altere só os itens enviados em quantidade menor: a diferença fica registrada como falta.
+                    Para salvar aos poucos, deixe vazios os itens ainda não conferidos.
                   </p>
                   <button
                     onClick={salvarSeparacao}
@@ -399,32 +365,10 @@ export default function SemanaEmAndamento({ modo }: { modo: ModoSemana }) {
                 </div>
               )}
 
-              {modo === 'almoxarife' && !local.semPedido && local.status !== 'Pendente' && (
+              {modo === 'almoxarife' && !local.semPedido && local.status === 'Retirado' && (
                 <p className="p-3 bg-slate-100 text-slate-700 rounded-xl text-xs font-semibold flex items-center gap-2 border border-slate-200">
-                  <Lock className="w-4 h-4 text-slate-500" /> Separação deste local concluída.
+                  <Lock className="w-4 h-4 text-slate-500" /> Separação e retirada deste local concluídas.
                 </p>
-              )}
-
-              {modo === 'coordenador' && local.status === 'Pendente' && !local.semPedido && (
-                <p className="p-3 bg-amber-50 text-amber-900 rounded-xl text-xs font-semibold border border-amber-200">
-                  Aguardando o almoxarifado concluir a separação deste local.
-                </p>
-              )}
-
-              {podeConfirmar && (
-                <div className="bg-blue-50/60 p-4 rounded-xl border border-blue-200 flex flex-col sm:flex-row sm:items-center gap-3">
-                  <p className="text-sm text-slate-800 sm:flex-1">
-                    Confira os materiais que chegaram do almoxarifado. Itens em falta ficam registrados como pendência.
-                  </p>
-                  <button
-                    onClick={confirmarRecebimento}
-                    disabled={ocupado}
-                    className="px-4 py-2.5 bg-blue-700 text-white hover:bg-blue-800 disabled:opacity-60 rounded-xl text-sm font-semibold transition flex items-center gap-2 shadow"
-                  >
-                    <PackageCheck className="w-4 h-4" />
-                    Confirmar recebimento
-                  </button>
-                </div>
               )}
 
               {podeRetirar && (
@@ -432,10 +376,13 @@ export default function SemanaEmAndamento({ modo }: { modo: ModoSemana }) {
                   <p className="text-sm font-bold text-slate-900 flex items-center gap-2">
                     <UserCheck className="w-4 h-4 text-[#1F6D2E]" /> Registrar retirada
                   </p>
+                  <p className="text-xs text-slate-600">
+                    Separação concluída. Na entrega, informe o nome da colaboradora responsável pela retirada: ele aparece nos relatórios.
+                  </p>
                   <div className="flex flex-col sm:flex-row sm:items-center gap-3">
                     <input
                       type="text"
-                      placeholder="Nome completo de quem está retirando *"
+                      placeholder="Responsável pela retirada (nome completo) *"
                       value={nomeRetirada}
                       onChange={(e) => setNomeRetirada(e.target.value)}
                       className="flex-1 px-3.5 py-2 bg-white border border-slate-300 rounded-lg text-sm font-semibold outline-none focus:ring-2 focus:ring-[#1F6D2E]"
@@ -554,7 +501,7 @@ export default function SemanaEmAndamento({ modo }: { modo: ModoSemana }) {
                 Local: <span className="font-bold text-slate-900">{local.nomeLocal}</span>
               </p>
               <p>
-                Quem está retirando: <span className="font-bold text-slate-900">{nomeRetirada.trim()}</span>
+                Responsável pela retirada: <span className="font-bold text-slate-900">{nomeRetirada.trim()}</span>
               </p>
               <p>
                 Itens entregues: <span className="font-bold text-slate-900">{local.itens.length}</span>

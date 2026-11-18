@@ -15,4 +15,6 @@ public interface IMaterialRepository
     Task<(IEnumerable<Material> Items, long TotalCount)> GetAtivosPagedAsync(int pageIndex, int pageSize, CancellationToken ct = default);
     Task AddAsync(Material material, CancellationToken ct = default);
     Task UpdateAsync(Material material, CancellationToken ct = default);
+    Task<bool> EstaEmUsoAsync(Guid id, CancellationToken ct = default);
+    void Remover(Material material);
 }

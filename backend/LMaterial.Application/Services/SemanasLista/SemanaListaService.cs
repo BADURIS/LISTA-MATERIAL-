@@ -213,7 +213,7 @@ public class SemanaListaService : ISemanaListaService
         return await SalvarERetornarAsync(semana, ct);
     }
 
-    public async Task<SemanaListaDto> RegistrarRetiradaAsync(Guid semanaId, RegistrarRetiradaRequest request, Guid coordenadorId, CancellationToken ct = default)
+    public async Task<SemanaListaDto> RegistrarRetiradaAsync(Guid semanaId, RegistrarRetiradaRequest request, Guid registradoPorId, CancellationToken ct = default)
     {
         var semana = await ObterSemanaAsync(semanaId, ct);
 
@@ -223,17 +223,31 @@ public class SemanaListaService : ISemanaListaService
 
         var dataRetirada = DateTime.UtcNow;
 
+        // O almoxarife entrega direto ao responsável: a lista separada é dada como recebida
+        // (itens em falta viram pendência) e a retirada é registrada no mesmo passo.
+        void Retirar(ListaLocal listaLocal)
+        {
+            if (listaLocal.Status == StatusListaLocal.Separado)
+                listaLocal.ConfirmarRecebimento(possuiPendencias: false);
+            listaLocal.RegistrarRetirada(nome, dataRetirada, registradoPorId);
+        }
+
         if (request.ListaLocalId.HasValue)
         {
             var listaLocal = semana.ListasLocais.FirstOrDefault(l => l.Id == request.ListaLocalId.Value || l.LocalId == request.ListaLocalId.Value)
                 ?? throw new DomainException("Lista local não encontrada.");
-            listaLocal.RegistrarRetirada(nome, dataRetirada, coordenadorId);
+            if (listaLocal.Status == StatusListaLocal.Pendente)
+                throw new DomainException("A separação deste local ainda não foi concluída.");
+            Retirar(listaLocal);
         }
         else
         {
-            foreach (var listaLocal in semana.ListasLocais.Where(l => l.Status == StatusListaLocal.Confirmado || l.Status == StatusListaLocal.ConfirmadoComPendencia))
+            foreach (var listaLocal in semana.ListasLocais.Where(l =>
+                         l.Status == StatusListaLocal.Separado ||
+                         l.Status == StatusListaLocal.Confirmado ||
+                         l.Status == StatusListaLocal.ConfirmadoComPendencia))
             {
-                listaLocal.RegistrarRetirada(nome, dataRetirada, coordenadorId);
+                Retirar(listaLocal);
             }
         }
 
@@ -246,6 +260,7 @@ public class SemanaListaService : ISemanaListaService
                 semana,
                 $"Semana {semana.DataInicio:dd/MM/yyyy} a {semana.DataFim:dd/MM/yyyy} finalizada: todas as retiradas foram registradas.",
                 PerfilUsuario.Supervisor,
+                PerfilUsuario.Coordenador,
                 PerfilUsuario.Gestor);
         }
 

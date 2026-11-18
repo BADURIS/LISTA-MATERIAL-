@@ -69,4 +69,14 @@ public class Usuario
     }
 
     public void Inativar() => Ativo = false;
+
+    // Troca a senha e derruba as sessões abertas (o refresh token antigo deixa de valer)
+    public void AlterarSenhaHash(string novaSenhaHash)
+    {
+        if (string.IsNullOrWhiteSpace(novaSenhaHash))
+            throw new DomainException("O hash da senha é obrigatório.");
+
+        SenhaHash = novaSenhaHash;
+        RevogarRefreshToken();
+    }
 }

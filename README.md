@@ -8,11 +8,13 @@ Junção dos dois projetos anteriores:
 
 ## Fluxo da semana
 
+O cadastro de materiais (criar, editar, inativar e excluir) é do **Almoxarife**. Material que já apareceu em algum pedido não é apagado: é inativado para manter o histórico.
+
 1. **Supervisor** cria a semana (já vem com todos os locais ativos) e faz o pedido de cada local, ou marca "sem pedido nesta semana". O **Coordenador** pode ajudar nos pedidos.
 2. O envio ao almoxarifado só é liberado quando todos os locais estão prontos.
-3. **Almoxarife** informa a quantidade separada de cada item (pode salvar aos poucos); faltas ficam registradas.
-4. **Coordenador** confirma o recebimento e registra a retirada com o nome de quem retirou (assinatura digital).
-5. Com todas as retiradas registradas a semana é finalizada.
+3. **Almoxarife** separa: as quantidades já vêm iguais ao pedido e ele só altera o que foi enviado a menos (a falta fica registrada). Pode salvar aos poucos.
+4. Na entrega, o **Almoxarife** registra a retirada com o nome da colaboradora responsável (assinatura digital: nome + data/hora). O nome sai nos relatórios PDF e na aba "Retiradas" da planilha da semana.
+5. Com todas as retiradas registradas a semana é finalizada e Supervisor, Coordenador e Gestor são avisados.
 6. **Gestor** acompanha consumo (por material/local e evolução semanal), histórico e exporta planilhas Excel e relatórios em PDF.
 
 Avisos dentro do sistema (sino no topo) são enviados em cada etapa.
@@ -30,6 +32,7 @@ cd backend/LMaterial.API
 dotnet user-secrets set "JwtSettings:Secret" "<segredo com pelo menos 32 caracteres>"
 dotnet user-secrets set "ConnectionStrings:DefaultConnection" "Host=localhost;Port=5432;Database=lmaterial_db;Username=postgres;Password=<senha>"
 dotnet user-secrets set "SeedUsuarios:supervisor:Password" "<senha>"   # idem para gestor, almoxarife, coordenador
+# Trocar a senha depois: altere o valor e reinicie a API (o hash do usuário é atualizado na inicialização)
 
 # 3. API (aplica as migrations e cria os usuários na primeira execução)
 cd ..
@@ -48,7 +51,7 @@ na mesma rede só precisam acessar `http://<ip-do-computador>:3000`.
 
 ```bash
 cd backend && dotnet test                         # testes das regras de negócio
-node scripts/popular-demo.mjs 4 <senha>           # fluxo completo pela API; deixa 4 semanas de demonstração no banco
+SENHA_SUPERVISOR=<senha> SENHA_ALMOXARIFE=<senha> node scripts/popular-demo.mjs 4   # fluxo completo pela API; deixa 4 semanas de demonstração no banco
 ```
 
 ## Relatórios em PDF

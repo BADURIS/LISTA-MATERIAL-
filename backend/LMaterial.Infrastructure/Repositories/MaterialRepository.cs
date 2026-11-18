@@ -80,4 +80,10 @@ public class MaterialRepository : IMaterialRepository
         _context.Materiais.Update(material);
         return Task.CompletedTask;
     }
+
+    // Material que já apareceu em algum pedido faz parte do histórico e não pode ser apagado
+    public Task<bool> EstaEmUsoAsync(Guid id, CancellationToken ct = default)
+        => _context.ListaLocalItens.AnyAsync(i => i.MaterialId == id, ct);
+
+    public void Remover(Material material) => _context.Materiais.Remove(material);
 }

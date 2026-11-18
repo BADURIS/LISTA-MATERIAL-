@@ -15,13 +15,13 @@ const PERFIS = [
   {
     username: 'coordenador',
     titulo: 'Coordenador',
-    desc: 'Ajuda nos pedidos, confirma o recebimento e registra a retirada.',
+    desc: 'Ajuda o supervisor a preencher os pedidos de cada local.',
     icon: <UserCheck className="w-5 h-5 text-amber-700" />,
   },
   {
     username: 'almoxarife',
     titulo: 'Almoxarife',
-    desc: 'Separa os materiais e informa as quantidades e faltas.',
+    desc: 'Cadastra materiais, separa os pedidos e registra quem retirou.',
     icon: <ClipboardCheck className="w-5 h-5 text-blue-700" />,
   },
   {
