@@ -61,7 +61,7 @@ builder.Services.AddOpenApi();
 
 // 2. Configuração do DbContext com PostgreSQL
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+    options.UseNpgsql(LMaterial.API.Extensions.ConexaoBanco.Normalizar(builder.Configuration.GetConnectionString("DefaultConnection"))));
 
 // 3. Configuração de Autenticação JWT
 // O segredo não tem valor padrão no código: deve vir de user-secrets, variável de ambiente ou cofre de segredos
