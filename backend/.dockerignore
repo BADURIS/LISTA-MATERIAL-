@@ -1,0 +1,8 @@
+**/bin/
+**/obj/
+**/.vs/
+**/*.user
+**/TestResults/
+LMaterial.Domain.UnitTests/
+**/appsettings.Development.json
+**/appsettings.*.local.json
